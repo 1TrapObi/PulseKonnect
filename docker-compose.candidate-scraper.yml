@@ -1,0 +1,23 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  candidate-scraper-worker:
+    build:
+      context: ./services/candidate-scraper
+    env_file:
+      - ./services/candidate-scraper/.env
+    depends_on:
+      - redis
+    command: ["celery", "-A", "candidate_scraper.celery_config", "worker", "-l", "INFO"]
+
+  candidate-scraper-beat:
+    build:
+      context: ./services/candidate-scraper
+    env_file:
+      - ./services/candidate-scraper/.env
+    depends_on:
+      - redis
+    command: ["celery", "-A", "candidate_scraper.celery_config", "beat", "-l", "INFO"]

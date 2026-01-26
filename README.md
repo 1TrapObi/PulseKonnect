@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PulseKonnect (MVP)
 
-## Getting Started
+PulseKonnect is a Next.js (App Router) + Supabase application for managing leads, recruitment, analytics, and organization settings.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 20+
+- npm (recommended) or pnpm/yarn
+- A Supabase project
+
+Optional (for background jobs / scrapers):
+
+- Docker (for Redis + Celery-based scraper workers)
+
+## 1) Install dependencies
+
+```bash
+npm install
+```
+
+## 2) Configure environment variables
+
+Copy `.env.example` to `.env.local` and fill in values.
+
+Required:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `REDIS_URL` (local dev usually `redis://localhost:6379`)
+- `RESEND_API_KEY` (email sending)
+
+Recommended (security for storing third-party secrets):
+
+- `PK_ENCRYPTION_KEY` (32+ chars; do not commit)
+
+Example:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+REDIS_URL=redis://localhost:6379
+RESEND_API_KEY=...
+PK_ENCRYPTION_KEY=change-me-to-a-long-random-string
+```
+
+## 3) Set up Supabase (schema + migrations)
+
+Migrations live in `supabase/migrations/`.
+
+If you use the Supabase CLI, apply migrations to your local/project DB using your normal workflow (recommended for teams). If you are using the Supabase Dashboard, you can also run the SQL in the migration files in order.
+
+Important migrations for Settings + scrapers:
+
+- `supabase/migrations/20260112_add_settings_scraper_logs_and_security_tables.sql`
+
+## 4) Run the web app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- http://localhost:3000
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## (Optional) Run Redis + scraper workers
 
-## Learn More
+There are docker-compose files to run Redis plus the Celery worker/beat services.
 
-To learn more about Next.js, take a look at the following resources:
+Lead scraper:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose -f docker-compose.lead-scraper.yml up
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Candidate scraper:
 
-## Deploy on Vercel
+```bash
+docker compose -f docker-compose.candidate-scraper.yml up
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Note: the worker containers read env from:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `services/lead-scraper/.env`
+- `services/candidate-scraper/.env`
+
+## App navigation (what to click)
+
+- **Login**: `/login`
+- **Dashboard area**: `src/app/(dashboard)/...`
+- **Settings hub**: `/settings`
+  - Organization tab is implemented and persists to Supabase.
+  - Additional settings tabs are scaffolded for ongoing work.
+
+## Codebase map (where to develop)
+
+- **UI routes (Next.js App Router)**: `src/app/`
+  - Auth pages: `src/app/(auth)/...`
+  - Dashboard pages: `src/app/(dashboard)/...`
+  - API routes: `src/app/api/...`
+
+- **Settings APIs**: `src/app/api/settings/...`
+  - Example: `src/app/api/settings/organization/route.ts`
+
+- **Supabase clients**: `src/lib/db/supabase/`
+  - Server: `src/lib/db/supabase/server.ts`
+  - Browser: `src/lib/db/supabase/browser.ts`
+
+- **State management**: `src/lib/store/` (Zustand)
+
+- **Validation**: `src/lib/validation/` (Zod)
+
+- **Scraper services (Python)**: `services/`
+  - Lead scraper: `services/lead-scraper/`
+  - Candidate scraper: `services/candidate-scraper/`
+
+## Common scripts
+
+- `npm run dev` - start Next.js dev server
+- `npm run build` - production build
+- `npm run lint` - lint
+- `npm run worker:notifications` - run the notifications worker locally
+
+## Sharing this repo with an intern (recommended workflow)
+
+- Do not commit `.env.local`.
+- Make sure the intern uses `.env.example` as the template.
+- Have them create their own Supabase project (or give access to a dev/staging project).

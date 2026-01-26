@@ -1,0 +1,23 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  lead-scraper-worker:
+    build:
+      context: ./services/lead-scraper
+    env_file:
+      - ./services/lead-scraper/.env
+    depends_on:
+      - redis
+    command: ["celery", "-A", "lead_scraper.celery_config", "worker", "-l", "INFO"]
+
+  lead-scraper-beat:
+    build:
+      context: ./services/lead-scraper
+    env_file:
+      - ./services/lead-scraper/.env
+    depends_on:
+      - redis
+    command: ["celery", "-A", "lead_scraper.celery_config", "beat", "-l", "INFO"]

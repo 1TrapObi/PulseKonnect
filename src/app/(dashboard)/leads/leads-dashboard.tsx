@@ -1,0 +1,727 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { Grid3X3, List, Plus, Search } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, type SelectOption } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ToastViewport, useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+type Lead = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  need_type: string | null;
+  location: string | null;
+  source: string | null;
+  source_url: string | null;
+  status: string | null;
+  urgency: string | null;
+  qualification_status?: string | null;
+  qualification_score?: number | null;
+  created_at: string;
+};
+
+type LeadsResponse = {
+  ok: boolean;
+  leads: Lead[];
+  total: number;
+  page: number;
+  totalPages: number;
+  sources: SelectOption[];
+};
+
+type StatsResponse = {
+  ok: boolean;
+  new: number;
+  contacted: number;
+  qualified: number;
+  converted: number;
+  lost: number;
+};
+
+type CreateLeadBody = {
+  name: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  need_type?: string;
+  source?: string;
+  source_url?: string;
+  urgency?: "low" | "medium" | "high";
+  notes?: string;
+};
+
+function timeAgo(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function urgencyStyle(urgency: string | null | undefined) {
+  const u = (urgency ?? "medium").toLowerCase();
+  if (u === "high") {
+    return {
+      bg: "bg-[#FEE2E2]",
+      border: "border-[#EF4444]",
+      dot: "bg-[#EF4444]",
+      label: "High",
+    };
+  }
+  if (u === "low") {
+    return {
+      bg: "bg-[#D1FAE5]",
+      border: "border-[#10B981]",
+      dot: "bg-[#10B981]",
+      label: "Low",
+    };
+  }
+  return {
+    bg: "bg-[#FEF3C7]",
+    border: "border-[#F59E0B]",
+    dot: "bg-[#F59E0B]",
+    label: "Medium",
+  };
+}
+
+function useDebounced<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+export function LeadsDashboard() {
+  const [view, setView] = React.useState<"grid" | "list">("grid");
+
+  const [newLeadOpen, setNewLeadOpen] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  const [leadName, setLeadName] = React.useState("");
+  const [leadEmail, setLeadEmail] = React.useState("");
+  const [leadPhone, setLeadPhone] = React.useState("");
+  const [leadLocation, setLeadLocation] = React.useState("");
+  const [leadNeedType, setLeadNeedType] = React.useState("");
+  const [leadSource, setLeadSource] = React.useState("");
+  const [leadSourceUrl, setLeadSourceUrl] = React.useState("");
+  const [leadUrgency, setLeadUrgency] = React.useState<"low" | "medium" | "high">("medium");
+  const [leadNotes, setLeadNotes] = React.useState("");
+
+  const [status, setStatus] = React.useState("all");
+  const [urgency, setUrgency] = React.useState("all");
+  const [source, setSource] = React.useState("all");
+
+  const [rangePreset, setRangePreset] = React.useState<
+    "7d" | "30d" | "month" | "custom"
+  >("7d");
+  const [customStart, setCustomStart] = React.useState("");
+  const [customEnd, setCustomEnd] = React.useState("");
+
+  const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebounced(search, 350);
+
+  const [page, setPage] = React.useState(1);
+
+  const [data, setData] = React.useState<LeadsResponse | null>(null);
+  const [stats, setStats] = React.useState<StatsResponse | null>(null);
+  const [leadsError, setLeadsError] = React.useState<string | null>(null);
+  const [statsError, setStatsError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  const lastHighLeadIdRef = React.useRef<string | null>(null);
+  const { items: toasts, push, remove } = useToast();
+
+  const dateRange = React.useMemo(() => {
+    if (rangePreset === "custom") {
+      return { startDate: customStart || null, endDate: customEnd || null };
+    }
+
+    const now = new Date();
+    const endDate = now.toISOString();
+
+    if (rangePreset === "month") {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { startDate: start.toISOString(), endDate };
+    }
+
+    const days = rangePreset === "7d" ? 7 : 30;
+    const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return { startDate: start.toISOString(), endDate };
+  }, [rangePreset, customStart, customEnd]);
+
+  const sourcesOptions = React.useMemo<SelectOption[]>(() => {
+    return [{ value: "all", label: "All Sources" }, ...(data?.sources ?? [])];
+  }, [data]);
+
+  const fetchLeads = React.useCallback(async () => {
+    const params = new URLSearchParams();
+    params.set("status", status);
+    params.set("urgency", urgency);
+    params.set("source", source);
+    params.set("page", String(page));
+    if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+    if (dateRange.startDate) params.set("startDate", dateRange.startDate);
+    if (dateRange.endDate) params.set("endDate", dateRange.endDate);
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/leads?${params.toString()}`);
+      const json = (await res.json().catch(() => ({}))) as any;
+
+      if (!res.ok || !json?.ok) {
+        setLeadsError(json?.error ?? `Failed to load leads (${res.status})`);
+        setData({ ok: false, leads: [], total: 0, page, totalPages: 1, sources: [] });
+        return;
+      }
+
+      setLeadsError(null);
+      setData(json as LeadsResponse);
+
+      // toast if a new high urgency lead appears at the top
+      const first = (json as LeadsResponse).leads?.[0];
+      const isHigh = (first?.urgency ?? "").toLowerCase() === "high";
+      if (first?.id && isHigh) {
+        if (lastHighLeadIdRef.current && lastHighLeadIdRef.current !== first.id) {
+          push({
+            title: "New high-priority lead",
+            description: `${first.name ?? "New lead"} (${first.location ?? ""})`,
+            variant: "danger",
+          });
+        }
+        lastHighLeadIdRef.current = first.id;
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [status, urgency, source, page, debouncedSearch, dateRange, push]);
+
+  const fetchStats = React.useCallback(async () => {
+    const res = await fetch(`/api/leads/stats`);
+    const json = (await res.json().catch(() => ({}))) as any;
+
+    if (!res.ok || !json?.ok) {
+      setStatsError(json?.error ?? `Failed to load stats (${res.status})`);
+      setStats(null);
+      return;
+    }
+
+    setStatsError(null);
+    setStats(json as StatsResponse);
+  }, []);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [status, urgency, source, debouncedSearch, dateRange.startDate, dateRange.endDate]);
+
+  React.useEffect(() => {
+    fetchLeads();
+    fetchStats();
+  }, [fetchLeads, fetchStats]);
+
+  React.useEffect(() => {
+    const t = window.setInterval(() => {
+      fetchLeads();
+      fetchStats();
+    }, 30_000);
+    return () => window.clearInterval(t);
+  }, [fetchLeads, fetchStats]);
+
+  const statusOptions: SelectOption[] = [
+    { value: "all", label: "All Statuses" },
+    { value: "new", label: "New" },
+    { value: "contacted", label: "Contacted" },
+    { value: "qualified", label: "Qualified" },
+    { value: "converted", label: "Converted" },
+    { value: "lost", label: "Lost" },
+  ];
+
+  const urgencyOptions: SelectOption[] = [
+    { value: "all", label: "All Urgency" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  const rangeOptions: SelectOption[] = [
+    { value: "7d", label: "Last 7 days" },
+    { value: "30d", label: "Last 30 days" },
+    { value: "month", label: "This month" },
+    { value: "custom", label: "Custom" },
+  ];
+
+  const leads = data?.leads ?? [];
+
+  async function assignToMe(leadId: string) {
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assignToMe: true }),
+      });
+      const json = (await res.json().catch(() => ({}))) as any;
+
+      if (!res.ok || !json?.ok) {
+        push({
+          title: "Assignment failed",
+          description: json?.error ?? `Failed to assign lead (${res.status})`,
+          variant: "danger",
+        });
+        return;
+      }
+
+      push({
+        title: "Assigned",
+        description: "This lead has been assigned to you.",
+        variant: "default",
+      });
+
+      fetchLeads();
+    } catch (e: any) {
+      push({
+        title: "Assignment failed",
+        description: e?.message ?? "Unknown error",
+        variant: "danger",
+      });
+    }
+  }
+
+  function resetNewLeadForm() {
+    setCreateError(null);
+    setLeadName("");
+    setLeadEmail("");
+    setLeadPhone("");
+    setLeadLocation("");
+    setLeadNeedType("");
+    setLeadSource("");
+    setLeadSourceUrl("");
+    setLeadUrgency("medium");
+    setLeadNotes("");
+  }
+
+  async function createLead() {
+    if (!leadName.trim()) {
+      setCreateError("Name is required");
+      return;
+    }
+
+    const payload: CreateLeadBody = {
+      name: leadName.trim(),
+      email: leadEmail.trim() || undefined,
+      phone: leadPhone.trim() || undefined,
+      location: leadLocation.trim() || undefined,
+      need_type: leadNeedType.trim() || undefined,
+      source: leadSource.trim() || undefined,
+      source_url: leadSourceUrl.trim() || undefined,
+      urgency: leadUrgency,
+      notes: leadNotes.trim() || undefined,
+    };
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json().catch(() => ({}))) as any;
+
+      if (!res.ok || !json?.ok) {
+        setCreateError(json?.error ?? `Failed to create lead (${res.status})`);
+        return;
+      }
+
+      push({
+        title: "Lead created",
+        description: `${payload.name} has been added to Leads`,
+      });
+
+      setNewLeadOpen(false);
+      resetNewLeadForm();
+      await fetchLeads();
+      await fetchStats();
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Dialog
+        open={newLeadOpen}
+        onOpenChange={(open) => {
+          setNewLeadOpen(open);
+          if (open) resetNewLeadForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Lead</DialogTitle>
+            <DialogDescription>
+              Manually add a lead to test sources and verify they appear in Leads and Analytics.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-3 grid gap-3">
+            {createError ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                {createError}
+              </div>
+            ) : null}
+
+            <div className="grid gap-1">
+              <div className="text-sm font-medium text-zinc-900">Name</div>
+              <Input value={leadName} onChange={(e) => setLeadName(e.target.value)} placeholder="Jane Doe" />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Email</div>
+                <Input
+                  value={leadEmail}
+                  onChange={(e) => setLeadEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                />
+              </div>
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Phone</div>
+                <Input
+                  value={leadPhone}
+                  onChange={(e) => setLeadPhone(e.target.value)}
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Location</div>
+                <Input
+                  value={leadLocation}
+                  onChange={(e) => setLeadLocation(e.target.value)}
+                  placeholder="County / City"
+                />
+              </div>
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Need Type</div>
+                <Input
+                  value={leadNeedType}
+                  onChange={(e) => setLeadNeedType(e.target.value)}
+                  placeholder="Housing, Food, Employment…"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Source</div>
+                <Input
+                  value={leadSource}
+                  onChange={(e) => setLeadSource(e.target.value)}
+                  placeholder="Website / Referral / Walk-in…"
+                  list="lead-source-suggestions"
+                />
+                <datalist id="lead-source-suggestions">
+                  {(data?.sources ?? [])
+                    .filter((s) => s.value !== "all")
+                    .slice(0, 40)
+                    .map((s) => (
+                      <option key={s.value} value={s.value} />
+                    ))}
+                </datalist>
+              </div>
+              <div className="grid gap-1">
+                <div className="text-sm font-medium text-zinc-900">Source URL (optional)</div>
+                <Input
+                  value={leadSourceUrl}
+                  onChange={(e) => setLeadSourceUrl(e.target.value)}
+                  placeholder="https://example.com"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-1">
+              <div className="text-sm font-medium text-zinc-900">Urgency</div>
+              <Select
+                value={leadUrgency}
+                onChange={(e) => setLeadUrgency(e.target.value as any)}
+                options={[
+                  { value: "low", label: "Low" },
+                  { value: "medium", label: "Medium" },
+                  { value: "high", label: "High" },
+                ]}
+              />
+            </div>
+
+            <div className="grid gap-1">
+              <div className="text-sm font-medium text-zinc-900">Notes (optional)</div>
+              <Textarea
+                value={leadNotes}
+                onChange={(e) => setLeadNotes(e.target.value)}
+                placeholder="Any context about the lead…"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={creating}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={createLead} disabled={creating}>
+              {creating ? "Creating…" : "Create lead"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {leadsError || statsError ? (
+        <Card className="border-[#EF4444] bg-[#FEF2F2]">
+          <CardHeader>
+            <CardTitle className="text-[#991B1B]">Dashboard data error</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-[#7F1D1D]">
+            {leadsError ? <div>Leads: {leadsError}</div> : null}
+            {statsError ? <div>Stats: {statsError}</div> : null}
+            <div className="pt-2">
+              <Button type="button" variant="outline" onClick={() => {
+                fetchLeads();
+                fetchStats();
+              }}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="sticky top-0 z-10 -mx-4 border-b bg-zinc-50 px-4 py-3 md:-mx-6 md:px-6">
+        <div className="grid gap-3 md:grid-cols-14">
+          <div className="md:col-span-2">
+            <Select value={status} onChange={(e) => setStatus(e.target.value)} options={statusOptions} />
+          </div>
+          <div className="md:col-span-2">
+            <Select value={urgency} onChange={(e) => setUrgency(e.target.value)} options={urgencyOptions} />
+          </div>
+          <div className="md:col-span-2">
+            <Select value={source} onChange={(e) => setSource(e.target.value)} options={sourcesOptions.length ? sourcesOptions : [{ value: "all", label: "All Sources" }]} />
+          </div>
+          <div className="md:col-span-2">
+            <Select
+              value={rangePreset}
+              onChange={(e) => setRangePreset(e.target.value as any)}
+              options={rangeOptions}
+            />
+          </div>
+          <div className="md:col-span-4">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name/email/phone"
+                className="pl-8"
+              />
+            </div>
+          </div>
+          <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              onClick={() => setNewLeadOpen(true)}
+              size="icon"
+              className="md:hidden"
+              style={{ backgroundColor: "#40E0D0", color: "#062925" }}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setNewLeadOpen(true)}
+              className="hidden md:inline-flex"
+              style={{ backgroundColor: "#40E0D0", color: "#062925" }}
+            >
+              <span className="mr-2">+</span>
+              <span>New Lead</span>
+            </Button>
+            <Button
+              variant={view === "grid" ? "secondary" : "outline"}
+              size="icon"
+              onClick={() => setView("grid")}
+              aria-label="Grid view"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={view === "list" ? "secondary" : "outline"}
+              size="icon"
+              onClick={() => setView("list")}
+              aria-label="List view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {rangePreset === "custom" ? (
+            <div className="md:col-span-12 grid gap-2 md:grid-cols-4">
+              <Input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+              />
+              <Input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+              />
+              <div className="md:col-span-2 text-xs text-zinc-500">
+                Use custom date range (UTC).
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Lead Overview</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <Badge className="bg-white" variant="secondary">
+              {`${stats?.new ?? 0} New`}
+            </Badge>
+            <Badge className="bg-white" variant="secondary">
+              {`${stats?.contacted ?? 0} Contacted`}
+            </Badge>
+            <Badge className="bg-white" variant="secondary">
+              {`${stats?.qualified ?? 0} Qualified`}
+            </Badge>
+            <Badge className="bg-white" variant="secondary">
+              {`${stats?.converted ?? 0} Won`}
+            </Badge>
+            <Badge className="bg-white" variant="secondary">
+              {`${stats?.lost ?? 0} Lost`}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-zinc-600">
+            {loading ? "Refreshing…" : `Showing ${leads.length} of ${data?.total ?? 0} leads`}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div
+        className={cn(
+          view === "grid"
+            ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            : "space-y-3"
+        )}
+      >
+        {leads.map((lead) => {
+          const u = urgencyStyle(lead.urgency);
+          return (
+            <Card
+              key={lead.id}
+              className={cn(
+                "border",
+                u.border,
+                u.bg,
+                view === "list" ? "overflow-hidden" : ""
+              )}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2.5 w-2.5 rounded-full", u.dot)} />
+                      <div className="text-sm font-semibold text-zinc-900">
+                        {lead.name}
+                      </div>
+                      <Badge variant={u.label === "High" ? "danger" : u.label === "Low" ? "success" : "warning"}>
+                        {u.label}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-600">
+                      {lead.email ?? ""}{lead.email && lead.phone ? " • " : ""}{lead.phone ?? ""}
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-600">{timeAgo(lead.created_at)}</div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="text-sm text-zinc-900">
+                  <span className="font-medium">Need:</span> {lead.need_type ?? "—"}
+                </div>
+                <div className="text-sm text-zinc-700">
+                  <span className="font-medium">Area:</span> {lead.location ?? "—"}
+                </div>
+                <div className="text-xs text-zinc-600">
+                  Source: {lead.source ?? "—"}
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/leads/${lead.id}`}>View Details</Link>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => assignToMe(lead.id)}>
+                    Assign to Me
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-zinc-600">
+          Page {data?.page ?? page} of {data?.totalPages ?? 1}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={(data?.page ?? page) <= 1}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setPage((p) => Math.min(data?.totalPages ?? p + 1, p + 1))
+            }
+            disabled={(data?.page ?? page) >= (data?.totalPages ?? 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
+      <ToastViewport items={toasts} remove={remove} />
+    </div>
+  );
+}

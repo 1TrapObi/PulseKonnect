@@ -1,0 +1,13 @@
+celery==5.4.0
+redis==5.0.8
+python-dotenv==1.0.1
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+rapidfuzz==3.10.1
+psycopg[binary]==3.2.3
+supabase==2.7.4
+pydantic==2.10.3
+pytest==8.3.4
+pytest-cov==6.0.0
+freezegun==1.5.1
