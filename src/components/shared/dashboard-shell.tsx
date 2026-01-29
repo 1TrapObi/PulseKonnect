@@ -71,7 +71,7 @@ export function DashboardShell({
           <SidebarNav collapsed={sidebarCollapsed} />
         </aside>
 
-        <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-screen flex-1 flex-col">
           <header className="flex h-14 items-center justify-between border-b bg-white px-4 md:px-6">
             <div className="flex items-center gap-2">
               <button
@@ -98,7 +98,7 @@ export function DashboardShell({
             </div>
           </header>
 
-          <main className="flex-1 overflow-hidden p-4 md:p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
         </div>
       </div>
     </div>

@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastViewport, useToast } from "@/components/ui/toast";
+import { NotificationSettingsCard } from "@/components/notifications/notification-settings-card";
+import { LeadScraperSettingsCard } from "@/components/leads/lead-scraper-settings-card";
+import { CandidateScraperSettingsCard } from "@/components/candidates/candidate-scraper-settings-card";
+import { TeamSettingsCard } from "@/components/shared/team-settings-card";
+import { AccountSettingsCard } from "@/components/shared/account-settings-card";
 import { CheckboxGroup } from "@/components/onboarding/admin/checkbox-group";
 import { ServiceAreasCheckboxes } from "@/components/onboarding/admin/service-areas-checkboxes";
 
@@ -16,7 +21,6 @@ const TABS = [
   { value: "organization", label: "Organization" },
   { value: "lead-scraper", label: "Lead Scraper" },
   { value: "candidate-scraper", label: "Candidate Scraper" },
-  { value: "integrations", label: "Integrations" },
   { value: "team", label: "Team" },
   { value: "account", label: "Account" },
   { value: "notifications", label: "Notifications" },
@@ -359,45 +363,23 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="lead-scraper">
-            <TabPanel
-              title="Lead Scraper Configuration"
-              description="Manage lead sources, search parameters, scheduling, and run history."
-            />
+            <LeadScraperSettingsCard />
           </TabsContent>
 
           <TabsContent value="candidate-scraper">
-            <TabPanel
-              title="Candidate Scraper Configuration"
-              description="Manage candidate sources, credentials (masked), rate limiting, and run history."
-            />
-          </TabsContent>
-
-          <TabsContent value="integrations">
-            <TabPanel
-              title="Integrations"
-              description="Connect external tools (e.g., Post), manage sync settings, and webhooks."
-            />
+            <CandidateScraperSettingsCard />
           </TabsContent>
 
           <TabsContent value="team">
-            <TabPanel
-              title="Team Management"
-              description="Invite teammates, manage roles, and remove members."
-            />
+            <TeamSettingsCard />
           </TabsContent>
 
           <TabsContent value="account">
-            <TabPanel
-              title="Account Settings"
-              description="Update your profile and manage security settings (password, sessions, 2FA)."
-            />
+            <AccountSettingsCard />
           </TabsContent>
 
           <TabsContent value="notifications">
-            <TabPanel
-              title="Notification Preferences"
-              description="Configure email and in-app notifications, digests, and quiet hours."
-            />
+            <NotificationSettingsCard />
           </TabsContent>
         </div>
       </Tabs>

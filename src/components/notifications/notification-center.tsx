@@ -72,7 +72,7 @@ export function NotificationCenter() {
   }
 
   return (
-    <div className="relative" data-notification-center>
+    <div className="relative z-50" data-notification-center>
       <Button
         type="button"
         variant="outline"
@@ -90,7 +90,7 @@ export function NotificationCenter() {
       </Button>
 
       {open ? (
-        <Card className="absolute right-0 mt-2 w-[360px] border bg-white p-2 shadow-lg">
+        <Card className="absolute right-0 z-50 mt-2 w-[360px] border bg-white p-2 shadow-lg">
           <div className="flex items-center justify-between px-2 py-1">
             <div className="text-sm font-semibold text-zinc-900">Notifications</div>
             <Button type="button" variant="ghost" size="sm" onClick={markAllRead}>

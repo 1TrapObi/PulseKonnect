@@ -58,10 +58,10 @@ export const step3Schema = z.object({
       message: "Please set priority for at least one lead source",
     }),
   volumeGoal: z.enum(["low", "medium", "high", "very_high"], {
-    required_error: "Please select a lead volume goal",
+    message: "Please select a lead volume goal",
   }),
   assignmentMethod: z.enum(["manual", "round_robin", "geographic", "specialization"], {
-    required_error: "Please select an assignment method",
+    message: "Please select an assignment method",
   }),
   emailHighPriority: z.boolean().default(true),
   dailyDigest: z.boolean().default(false),
@@ -75,10 +75,10 @@ const positionSchema = z
     title: z.string().min(2, "Position title is required").max(200),
     requiredLicenses: z.array(z.string()).min(1, "Please select at least one required license"),
     experienceLevel: z.enum(["entry", "mid", "senior"], {
-      required_error: "Please select experience level",
+      message: "Please select experience level",
     }),
     employmentType: z.enum(["full_time", "part_time", "contract", "per_diem"], {
-      required_error: "Please select employment type",
+      message: "Please select employment type",
     }),
     specializations: z.array(z.string()).optional(),
     salaryMin: z.number().positive().optional(),
@@ -99,9 +99,7 @@ export const step4Schema = z
     skipPositions: z.boolean().default(false),
     positions: z.array(positionSchema).optional(),
     candidateSources: z.array(z.string()).min(1, "Please select at least one candidate source"),
-    hiringVolume: z.string({
-      required_error: "Please select expected hiring volume",
-    }),
+    hiringVolume: z.string().min(1, "Please select expected hiring volume"),
   })
   .refine(
     (data) => {
@@ -117,9 +115,7 @@ export type Step4FormData = z.infer<typeof step4Schema>;
 
 const teamInvitationSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
-  role: z.enum(["admin", "staff", "viewer"], {
-    required_error: "Please select a role",
-  }),
+  role: z.enum(["admin", "staff", "viewer"], { message: "Please select a role" }),
 });
 
 export const step5Schema = z

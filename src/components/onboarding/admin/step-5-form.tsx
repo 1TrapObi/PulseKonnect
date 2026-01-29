@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
+import type { z } from "zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,13 +35,15 @@ export function Step5Form({ initialValues }: { initialValues?: Partial<Step5Form
   const router = useRouter();
   const { setCurrentStep, setIntegrationsSetup } = useOnboardingStore();
 
+  type Step5FormValues = z.input<typeof step5Schema>;
+
   const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved">("idle");
   const [apiError, setApiError] = React.useState<string | null>(null);
   const [testingPost, setTestingPost] = React.useState(false);
   const [postTestResult, setPostTestResult] = React.useState<{ ok: boolean; message?: string } | null>(null);
   const [showSuccess, setShowSuccess] = React.useState(false);
 
-  const form = useForm<Step5FormData>({
+  const form = useForm<Step5FormValues>({
     resolver: zodResolver(step5Schema),
     mode: "onChange",
     defaultValues: {
