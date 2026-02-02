@@ -11,22 +11,38 @@ export type SendEmailJob = {
 
 export type NotificationJobPayload = SendEmailJob;
 
-export const notificationQueue = new Queue<NotificationJobPayload>("notification-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 5000,
+let notificationQueue: Queue<NotificationJobPayload> | null = null;
+
+function getNotificationQueue() {
+  if (!process.env.REDIS_URL) return null;
+  if (notificationQueue) return notificationQueue;
+
+  notificationQueue = new Queue<NotificationJobPayload>("notification-queue", {
+    connection: getRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 5000,
+      },
+      removeOnComplete: 500,
+      removeOnFail: 500,
     },
-    removeOnComplete: 500,
-    removeOnFail: 500,
-  },
-});
+  });
+
+  return notificationQueue;
+}
 
 export async function enqueueSendEmail(notificationId: string) {
-  return notificationQueue.add("send-email", {
-    jobType: "send-email",
-    notificationId,
-  });
+  const queue = getNotificationQueue();
+  if (!queue) return;
+
+  try {
+    return await queue.add("send-email", {
+      jobType: "send-email",
+      notificationId,
+    });
+  } catch {
+    return;
+  }
 }
