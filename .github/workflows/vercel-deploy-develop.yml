@@ -19,13 +19,27 @@ jobs:
             exit 1
           fi
 
+          echo "Hook URL host: $(echo "$VERCEL_DEV_DEPLOY_HOOK_URL" | sed -E 's#(https?://[^/]+).*#\1#')"
+
           for i in 1 2 3; do
             echo "Triggering deploy hook (attempt $i)..."
-            status=$(curl -sS -o /tmp/hook_response.txt -w "%{http_code}" -X POST "$VERCEL_DEV_DEPLOY_HOOK_URL")
-            cat /tmp/hook_response.txt
+            echo "--- POST ---"
+            status=$(curl -sS -L -o /tmp/hook_response.txt -w "%{http_code}" -X POST "$VERCEL_DEV_DEPLOY_HOOK_URL" || true)
+            echo "HTTP $status"
+            cat /tmp/hook_response.txt || true
 
-            if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
-              echo "Deploy hook triggered successfully."
+            if [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+              echo "Deploy hook triggered successfully via POST."
+              exit 0
+            fi
+
+            echo "--- GET fallback ---"
+            status=$(curl -sS -L -o /tmp/hook_response.txt -w "%{http_code}" "$VERCEL_DEV_DEPLOY_HOOK_URL" || true)
+            echo "HTTP $status"
+            cat /tmp/hook_response.txt || true
+
+            if [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+              echo "Deploy hook triggered successfully via GET."
               exit 0
             fi
 
