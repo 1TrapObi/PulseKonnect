@@ -1,0 +1,37 @@
+name: Deploy Dev (Vercel Hook)
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        env:
+          VERCEL_DEV_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEV_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$VERCEL_DEV_DEPLOY_HOOK_URL" ]; then
+            echo "Missing secret VERCEL_DEV_DEPLOY_HOOK_URL"
+            exit 1
+          fi
+
+          for i in 1 2 3; do
+            echo "Triggering deploy hook (attempt $i)..."
+            status=$(curl -sS -o /tmp/hook_response.txt -w "%{http_code}" -X POST "$VERCEL_DEV_DEPLOY_HOOK_URL")
+            cat /tmp/hook_response.txt
+
+            if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+              echo "Deploy hook triggered successfully."
+              exit 0
+            fi
+
+            echo "Deploy hook returned HTTP $status"
+            sleep $((i * 5))
+          done
+
+          echo "Deploy hook failed after retries."
+          exit 1
