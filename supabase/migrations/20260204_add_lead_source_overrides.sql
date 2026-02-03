@@ -3,11 +3,20 @@
 ALTER TABLE lead_sources
   ADD COLUMN IF NOT EXISTS parent_source_id UUID REFERENCES lead_sources(id) ON DELETE CASCADE;
 
-ALTER TABLE lead_sources
-  ADD CONSTRAINT IF NOT EXISTS chk_lead_sources_parent_org
-  CHECK (
-    parent_source_id IS NULL OR organization_id IS NOT NULL
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'chk_lead_sources_parent_org'
+  ) THEN
+    ALTER TABLE lead_sources
+      ADD CONSTRAINT chk_lead_sources_parent_org
+      CHECK (
+        parent_source_id IS NULL OR organization_id IS NOT NULL
+      );
+  END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_lead_sources_org_parent
   ON lead_sources(organization_id, parent_source_id)
