@@ -83,24 +83,52 @@ export async function POST(request: Request) {
 
     const sourceQuery = admin
       .from("lead_sources")
-      .select("id,organization_id,name,source_type,base_url,is_active,is_enabled")
+      .select("id,organization_id,parent_source_id,name,source_type,base_url,is_active,is_enabled")
       .eq("is_active", true)
       .or(`organization_id.is.null,organization_id.eq.${orgId}`);
 
     const { data: sources, error: srcErr } = requestedSourceIds
       ? await sourceQuery.in("id", requestedSourceIds)
-      : testAllEnabled
-      ? await sourceQuery.eq("is_enabled", true)
       : await sourceQuery;
 
     if (srcErr) {
       return NextResponse.json({ ok: false, error: srcErr.message }, { status: 500 });
     }
 
-    const filtered = (sources ?? []).filter((s: any) => {
-      const ownerOrgId = s?.organization_id ? String(s.organization_id) : null;
-      return !ownerOrgId || ownerOrgId === orgId;
-    });
+    const rows = (sources ?? []) as any[];
+
+    // Prefer org override rows when present for a given global source.
+    const overridesByParent = new Map<string, any>();
+    for (const r of rows) {
+      const parentId = r?.parent_source_id ? String(r.parent_source_id) : null;
+      const ownerOrgId = r?.organization_id ? String(r.organization_id) : null;
+      if (parentId && ownerOrgId === orgId) {
+        overridesByParent.set(parentId, r);
+      }
+    }
+
+    const effective: any[] = [];
+    for (const r of rows) {
+      const ownerOrgId = r?.organization_id ? String(r.organization_id) : null;
+      const parentId = r?.parent_source_id ? String(r.parent_source_id) : null;
+
+      if (ownerOrgId === orgId) {
+        effective.push(r);
+        continue;
+      }
+
+      // For global sources (org_id null, parent_id null), include only if there isn't an override.
+      if (!ownerOrgId && !parentId) {
+        const override = overridesByParent.get(String(r.id));
+        if (!override) effective.push(r);
+      }
+    }
+
+    const filtered = requestedSourceIds
+      ? effective
+      : testAllEnabled
+      ? effective.filter((s: any) => Boolean(s?.is_enabled ?? true))
+      : effective;
 
     if (filtered.length === 0) {
       return NextResponse.json({ ok: false, error: "No sources to test" }, { status: 400 });

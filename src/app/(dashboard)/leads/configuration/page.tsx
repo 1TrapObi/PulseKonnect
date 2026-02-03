@@ -3,7 +3,7 @@ import { LeadSourcesConfiguration } from "./lead-sources-configuration";
 
 export default function LeadsConfigurationPage() {
   return (
-    <DashboardShell title="Configuration">
+    <DashboardShell title="Lead Source Configuration">
       <LeadSourcesConfiguration />
     </DashboardShell>
   );
