@@ -85,7 +85,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         <div
           className={
             "overflow-hidden pl-3 transition-[max-height] duration-200 ease-out " +
-            (leadsOpen ? "max-h-40" : "max-h-0")
+            (leadsOpen ? "max-h-56" : "max-h-0")
           }
         >
           <div className="mt-1 space-y-1">
@@ -94,6 +94,9 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
             </NavLink>
             <NavLink href="/analytics/leads" collapsed={collapsed}>
               Analytics
+            </NavLink>
+            <NavLink href="/leads/configuration" collapsed={collapsed}>
+              Configuration
             </NavLink>
           </div>
         </div>
