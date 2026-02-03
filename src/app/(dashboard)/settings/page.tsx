@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastViewport, useToast } from "@/components/ui/toast";
 import { NotificationSettingsCard } from "@/components/notifications/notification-settings-card";
 import { LeadScraperSettingsCard } from "@/components/leads/lead-scraper-settings-card";
+import { LeadProfileTemplatesCard } from "@/components/leads/lead-profile-templates-card";
 import { CandidateScraperSettingsCard } from "@/components/candidates/candidate-scraper-settings-card";
 import { TeamSettingsCard } from "@/components/shared/team-settings-card";
 import { AccountSettingsCard } from "@/components/shared/account-settings-card";
@@ -19,6 +20,7 @@ import { ServiceAreasCheckboxes } from "@/components/onboarding/admin/service-ar
 
 const TABS = [
   { value: "organization", label: "Organization" },
+  { value: "lead-templates", label: "Lead Templates" },
   { value: "lead-scraper", label: "Lead Scraper" },
   { value: "candidate-scraper", label: "Candidate Scraper" },
   { value: "team", label: "Team" },
@@ -360,6 +362,10 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="lead-templates">
+            <LeadProfileTemplatesCard />
           </TabsContent>
 
           <TabsContent value="lead-scraper">
