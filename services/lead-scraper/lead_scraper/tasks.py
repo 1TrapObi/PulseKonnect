@@ -30,6 +30,133 @@ from .supabase_client import (
 logger = get_task_logger(__name__)
 
 
+def _build_scrapers_from_source_rows(source_rows: list[dict], settings) -> list:
+  scrapers = []
+
+  for row in source_rows:
+    source_type = str(row.get("source_type") or "").strip().lower()
+    if source_type in {"court", "court_dockets"}:
+      scrapers.append(CourtScraper())
+      continue
+
+    if source_type in {"hospital", "hospitals"}:
+      urls_val = row.get("urls")
+      urls: list[str] = []
+      if isinstance(urls_val, list):
+        urls = [str(u).strip() for u in urls_val if str(u).strip()]
+      elif isinstance(urls_val, str):
+        urls = [u.strip() for u in urls_val.split(",") if u.strip()]
+
+      if not urls:
+        base = str(row.get("base_url") or "").strip()
+        if base:
+          urls = [base]
+
+      scrapers.append(HospitalReferralScraper(urls or settings.hospital_urls))
+      continue
+
+    if source_type in {"samhsa", "findtreatment", "treatment_locator"}:
+      base = str(row.get("base_url") or "").strip() or settings.samhsa_base_url
+      scrapers.append(SAMHSATreatmentLocatorScraper(base))
+      continue
+
+    if source_type in {"community", "community_directory", "directory"}:
+      scrapers.append(CommunityDirectoryScraper())
+      continue
+
+  return scrapers
+
+
+def _run_discovery_for_org(*, organization_id: str, scrapers: list, settings) -> dict:
+  supabase = create_supabase(settings)
+
+  existing = fetch_existing_leads(supabase, organization_id)
+  logger.info("Loaded %s existing leads", len(existing))
+
+  discovered: list[Lead] = []
+  for scraper in scrapers:
+    try:
+      leads = scraper.scrape()
+      logger.info("Scraper %s produced %s leads", scraper.name, len(leads))
+      discovered.extend(leads)
+    except Exception as e:
+      logger.exception("Scraper %s failed: %s", getattr(scraper, "name", "unknown"), e)
+
+  inserted_count = 0
+  duplicate_count = 0
+
+  for lead in discovered:
+    lead_scored = score_urgency(lead, settings.crisis_keywords)
+    dupe = is_duplicate_candidate(lead_scored, existing)
+
+    if dupe.is_duplicate:
+      duplicate_count += 1
+      log_activity(
+        supabase,
+        lead_id=None,
+        user_id=None,
+        action="lead_discovery_duplicate_skipped",
+        notes=json.dumps(
+          {
+            "source": lead_scored.source,
+            "name": lead_scored.name,
+            "email": lead_scored.email,
+            "phone": lead_scored.phone,
+            "reason": dupe.reason,
+          }
+        ),
+      )
+      continue
+
+    row = _lead_to_row(lead_scored, organization_id)
+    inserted = insert_lead(supabase, row)
+
+    if inserted and inserted.get("id"):
+      inserted_count += 1
+      existing.append(
+        {
+          "id": inserted.get("id"),
+          "name": inserted.get("name"),
+          "email": inserted.get("email"),
+          "phone": inserted.get("phone"),
+        }
+      )
+      log_activity(
+        supabase,
+        lead_id=inserted.get("id"),
+        user_id=None,
+        action="lead_discovered",
+        notes=json.dumps(
+          {
+            "source": lead_scored.source,
+            "source_url": lead_scored.source_url,
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
+          }
+        ),
+      )
+
+      try:
+        qualify_lead.delay(inserted.get("id"), organization_id)
+      except Exception as e:
+        logger.exception("Failed to enqueue qualification for lead %s: %s", inserted.get("id"), e)
+        log_activity(
+          supabase,
+          lead_id=inserted.get("id"),
+          user_id=None,
+          action="lead_qualification_failed",
+          notes=json.dumps({"error": str(e)}),
+        )
+
+  summary = {
+    "inserted": inserted_count,
+    "duplicates": duplicate_count,
+    "total": len(discovered),
+  }
+
+  logger.info("Lead discovery summary: %s", summary)
+  return summary
+
+
 def _lead_to_row(lead: Lead, organization_id: str) -> dict:
   return {
     "name": lead.name,
@@ -149,11 +276,6 @@ def run_lead_discovery() -> dict:
   if not settings.lead_organization_id:
     raise ValueError("LEAD_ORGANIZATION_ID is required")
 
-  supabase = create_supabase(settings)
-
-  existing = fetch_existing_leads(supabase, settings.lead_organization_id)
-  logger.info("Loaded %s existing leads", len(existing))
-
   scrapers = []
   if settings.scrape_enabled_court:
     scrapers.append(CourtScraper())
@@ -164,85 +286,41 @@ def run_lead_discovery() -> dict:
   if settings.scrape_enabled_community:
     scrapers.append(CommunityDirectoryScraper())
 
-  discovered: list[Lead] = []
-  for scraper in scrapers:
-    try:
-      leads = scraper.scrape()
-      logger.info("Scraper %s produced %s leads", scraper.name, len(leads))
-      discovered.extend(leads)
-    except Exception as e:
-      logger.exception("Scraper %s failed: %s", getattr(scraper, "name", "unknown"), e)
+  return _run_discovery_for_org(
+    organization_id=settings.lead_organization_id,
+    scrapers=scrapers,
+    settings=settings,
+  )
 
-  inserted_count = 0
-  duplicate_count = 0
 
-  for lead in discovered:
-    lead_scored = score_urgency(lead, settings.crisis_keywords)
-    dupe = is_duplicate_candidate(lead_scored, existing)
+@celery_app.task(name="lead_scraper.tasks.run_lead_discovery_for_sources")
+def run_lead_discovery_for_sources(source_ids: list[str], organization_id: str) -> dict:
+  settings = get_settings()
 
-    if dupe.is_duplicate:
-      duplicate_count += 1
-      log_activity(
-        supabase,
-        lead_id=None,
-        user_id=None,
-        action="lead_discovery_duplicate_skipped",
-        notes=json.dumps(
-          {
-            "source": lead_scored.source,
-            "name": lead_scored.name,
-            "email": lead_scored.email,
-            "phone": lead_scored.phone,
-            "reason": dupe.reason,
-          }
-        ),
-      )
-      continue
+  if not organization_id:
+    raise ValueError("organization_id is required")
+  if not isinstance(source_ids, list) or not source_ids:
+    raise ValueError("source_ids is required")
 
-    row = _lead_to_row(lead_scored, settings.lead_organization_id)
-    inserted = insert_lead(supabase, row)
+  supabase = create_supabase(settings)
 
-    if inserted and inserted.get("id"):
-      inserted_count += 1
-      existing.append(
-        {
-          "id": inserted.get("id"),
-          "name": inserted.get("name"),
-          "email": inserted.get("email"),
-          "phone": inserted.get("phone"),
-        }
-      )
-      log_activity(
-        supabase,
-        lead_id=inserted.get("id"),
-        user_id=None,
-        action="lead_discovered",
-        notes=json.dumps(
-          {
-            "source": lead_scored.source,
-            "source_url": lead_scored.source_url,
-            "scraped_at": datetime.now(timezone.utc).isoformat(),
-          }
-        ),
-      )
+  resp = (
+    supabase.table("lead_sources")
+    .select("id,source_type,base_url,urls,is_active,is_enabled")
+    .in_("id", source_ids)
+    .eq("is_active", True)
+    .execute()
+  )
 
-      try:
-        qualify_lead.delay(inserted.get("id"), settings.lead_organization_id)
-      except Exception as e:
-        logger.exception("Failed to enqueue qualification for lead %s: %s", inserted.get("id"), e)
-        log_activity(
-          supabase,
-          lead_id=inserted.get("id"),
-          user_id=None,
-          action="lead_qualification_failed",
-          notes=json.dumps({"error": str(e)}),
-        )
+  rows = list(resp.data or [])
+  rows = [r for r in rows if bool((r or {}).get("is_enabled", True))]
 
-  summary = {
-    "inserted": inserted_count,
-    "duplicates": duplicate_count,
-    "total": len(discovered),
-  }
+  scrapers = _build_scrapers_from_source_rows(rows, settings)
+  if not scrapers:
+    return {"inserted": 0, "duplicates": 0, "total": 0}
 
-  logger.info("Lead discovery summary: %s", summary)
-  return summary
+  return _run_discovery_for_org(
+    organization_id=organization_id,
+    scrapers=scrapers,
+    settings=settings,
+  )

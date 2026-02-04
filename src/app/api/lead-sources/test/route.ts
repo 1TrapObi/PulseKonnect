@@ -5,6 +5,41 @@ import { getOrgIdForUser } from "@/lib/api/org";
 
 const DAILY_LIMIT = 3;
 
+async function maybeTriggerLeadScraper(params: { organizationId: string; sourceIds: string[] }) {
+  const triggerUrl = (process.env.LEAD_SCRAPER_TRIGGER_URL || "").trim();
+  if (!triggerUrl) return { ok: false as const, skipped: true as const };
+
+  const token = (process.env.LEAD_SCRAPER_TRIGGER_TOKEN || "").trim();
+
+  const url = `${triggerUrl.replace(/\/+$/, "")}/trigger`;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { "x-trigger-token": token } : {}),
+    },
+    body: JSON.stringify({ kind: "lead_sources_test", organizationId: params.organizationId, sourceIds: params.sourceIds }),
+    cache: "no-store",
+  });
+
+  const json = (await resp.json().catch(() => null)) as any;
+  if (!resp.ok) {
+    return {
+      ok: false as const,
+      skipped: false as const,
+      status: resp.status,
+      error: String(json?.error || `Trigger failed (${resp.status})`),
+    };
+  }
+
+  return {
+    ok: Boolean(json?.ok) as boolean,
+    skipped: false as const,
+    taskId: typeof json?.taskId === "string" ? json.taskId : null,
+  };
+}
+
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -136,6 +171,11 @@ export async function POST(request: Request) {
 
     const nowIso = new Date().toISOString();
 
+    const triggerAttempt = await maybeTriggerLeadScraper({
+      organizationId: orgId,
+      sourceIds: filtered.map((s: any) => String(s?.id)).filter(Boolean),
+    });
+
     if ((usageExisting as any)?.id) {
       const { error: updUsageErr } = await admin
         .from("lead_source_test_usage")
@@ -224,6 +264,7 @@ export async function POST(request: Request) {
       used: newUsed,
       remaining: Math.max(0, DAILY_LIMIT - newUsed),
       resetAt: startOfTomorrowUtcIso(),
+      trigger: triggerAttempt,
       results,
     });
   } catch (e: any) {

@@ -1,0 +1,62 @@
+services:
+  - type: redis
+    name: pulsekonnect-redis-dev
+    plan: free
+    region: virginia
+
+  - type: web
+    name: lead-scraper-trigger-dev
+    env: docker
+    region: virginia
+    rootDir: services/lead-scraper
+    dockerCommand: python -m lead_scraper.trigger_server
+    healthCheckPath: /healthz
+    plan: free
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: pulsekonnect-redis-dev
+          type: redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LEAD_SCRAPER_TRIGGER_TOKEN
+        sync: false
+
+  - type: worker
+    name: lead-scraper-worker-dev
+    env: docker
+    region: virginia
+    rootDir: services/lead-scraper
+    dockerCommand: celery -A lead_scraper.celery_config worker -l INFO
+    plan: free
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: pulsekonnect-redis-dev
+          type: redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  - type: worker
+    name: lead-scraper-beat-dev
+    env: docker
+    region: virginia
+    rootDir: services/lead-scraper
+    dockerCommand: celery -A lead_scraper.celery_config beat -l INFO
+    plan: free
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: pulsekonnect-redis-dev
+          type: redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

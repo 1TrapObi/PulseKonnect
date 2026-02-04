@@ -4,6 +4,17 @@ services:
     ports:
       - "6379:6379"
 
+  lead-scraper-trigger:
+    build:
+      context: ./services/lead-scraper
+    env_file:
+      - ./services/lead-scraper/.env
+    depends_on:
+      - redis
+    ports:
+      - "8080:8080"
+    command: ["python", "-m", "lead_scraper.trigger_server"]
+
   lead-scraper-worker:
     build:
       context: ./services/lead-scraper
