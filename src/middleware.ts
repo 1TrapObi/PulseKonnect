@@ -49,9 +49,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (inDashboardGroup && user && !user.email_confirmed_at) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/verify-email";
+    url.searchParams.set("email", user.email ?? "");
+    return NextResponse.redirect(url);
+  }
+
   if ((request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup") && user) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = user.email_confirmed_at ? "/dashboard" : "/verify-email";
+    if (!user.email_confirmed_at) url.searchParams.set("email", user.email ?? "");
     return NextResponse.redirect(url);
   }
 

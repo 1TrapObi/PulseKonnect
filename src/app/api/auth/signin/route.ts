@@ -17,6 +17,20 @@ export async function POST(request: Request) {
     return NextResponse.redirect(url, { status: 303 });
   }
 
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user?.email && !user.email_confirmed_at) {
+      const url = new URL("/verify-email", request.url);
+      url.searchParams.set("email", user.email);
+      return NextResponse.redirect(url, { status: 303 });
+    }
+  } catch {
+    // best effort; never block sign-in
+  }
+
   // Ensure app-level user row exists for older accounts.
   // Without this, /dashboard will redirect to onboarding because it can’t find users.organization_id.
   try {
