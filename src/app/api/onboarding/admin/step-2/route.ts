@@ -78,6 +78,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Missing organization" }, { status: 500 });
     }
 
+    const { data: existingProfile, error: existingProfileErr } = await admin
+      .from("organization_profiles")
+      .select("service_areas")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+
+    if (existingProfileErr) {
+      return NextResponse.json({ success: false, error: existingProfileErr.message }, { status: 500 });
+    }
+
+    let serviceAreas = (existingProfile as any)?.service_areas as string[] | null | undefined;
+    if (!serviceAreas || serviceAreas.length === 0) {
+      const { data: orgRow, error: orgRowErr } = await admin
+        .from("organizations")
+        .select("service_areas")
+        .eq("id", orgId)
+        .maybeSingle();
+
+      if (orgRowErr) {
+        return NextResponse.json({ success: false, error: orgRowErr.message }, { status: 500 });
+      }
+
+      serviceAreas = ((orgRow as any)?.service_areas as string[] | null | undefined) ?? [];
+    }
+
     const { error: orgErr } = await admin
       .from("organizations")
       .update({ onboarding_step: 3 })
@@ -92,6 +117,7 @@ export async function POST(request: Request) {
       .upsert(
         {
           organization_id: orgId,
+          service_areas: serviceAreas ?? [],
           service_types: parsed.data.serviceTypes,
           other_service_type: parsed.data.otherServiceType ?? null,
           age_groups: parsed.data.ageGroups,
