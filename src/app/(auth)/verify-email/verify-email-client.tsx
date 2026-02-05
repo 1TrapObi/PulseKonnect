@@ -21,7 +21,13 @@ export function VerifyEmailClient() {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/confirm`,
+        },
+      });
       if (resendError) throw resendError;
       setMessage("Verification email resent. Please check your inbox.");
     } catch (e: any) {
