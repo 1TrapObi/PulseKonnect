@@ -3,11 +3,12 @@ import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const token_hash = requestUrl.searchParams.get("token_hash");
+  const code = requestUrl.searchParams.get("code");
+  const token_hash = requestUrl.searchParams.get("token_hash") ?? requestUrl.searchParams.get("token");
   const type = requestUrl.searchParams.get("type");
   const next = requestUrl.searchParams.get("next") ?? "/onboarding/admin";
 
-  if (!token_hash || !type) {
+  if (!code && (!token_hash || !type)) {
     const url = new URL("/verify-email/error", request.url);
     url.searchParams.set("message", "Missing verification parameters.");
     return NextResponse.redirect(url);
@@ -15,15 +16,24 @@ export async function GET(request: Request) {
 
   const supabase = await createSupabaseServerClient();
 
-  const { error } = await supabase.auth.verifyOtp({
-    token_hash,
-    type: type as any,
-  });
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      const url = new URL("/verify-email/error", request.url);
+      url.searchParams.set("message", error.message);
+      return NextResponse.redirect(url);
+    }
+  } else {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: token_hash!,
+      type: type as any,
+    });
 
-  if (error) {
-    const url = new URL("/verify-email/error", request.url);
-    url.searchParams.set("message", error.message);
-    return NextResponse.redirect(url);
+    if (error) {
+      const url = new URL("/verify-email/error", request.url);
+      url.searchParams.set("message", error.message);
+      return NextResponse.redirect(url);
+    }
   }
 
   try {
