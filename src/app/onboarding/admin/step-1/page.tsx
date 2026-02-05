@@ -43,11 +43,6 @@ export default async function AdminOnboardingStep1Page() {
     redirect("/dashboard");
   }
 
-  const step = Number((org as any)?.onboarding_step ?? 1);
-  if (step > 1) {
-    redirect(`/onboarding/admin/step-${Math.min(5, step)}`);
-  }
-
   const { data: profile } = await admin
     .from("organization_profiles")
     .select("contact_name,contact_phone,service_areas,other_service_area")

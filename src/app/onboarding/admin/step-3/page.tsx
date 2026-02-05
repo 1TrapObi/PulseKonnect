@@ -45,7 +45,6 @@ export default async function AdminOnboardingStep3Page() {
 
   const step = Number((org as any)?.onboarding_step ?? 1);
   if (step < 3) redirect(`/onboarding/admin/step-${Math.max(1, step)}`);
-  if (step > 3) redirect(`/onboarding/admin/step-${Math.min(5, step)}`);
 
   const { data: prefs } = await admin
     .from("lead_preferences")

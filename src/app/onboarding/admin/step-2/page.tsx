@@ -45,7 +45,6 @@ export default async function AdminOnboardingStep2Page() {
 
   const step = Number((org as any)?.onboarding_step ?? 1);
   if (step < 2) redirect("/onboarding/admin/step-1");
-  if (step > 2) redirect(`/onboarding/admin/step-${Math.min(5, step)}`);
 
   const { data: profile } = await admin
     .from("organization_profiles")
