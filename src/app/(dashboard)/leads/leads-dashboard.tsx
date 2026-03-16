@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Grid3X3, List, Plus, Search } from "lucide-react";
 
+import { HelpTip } from "@/components/ui/help-tip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ToastViewport, useToast } from "@/components/ui/toast";
+import { markChecklistProgress } from "@/lib/onboarding/local-progress";
 import { cn } from "@/lib/utils";
 
 type Lead = {
@@ -38,6 +41,8 @@ type Lead = {
   created_at: string;
 };
 
+type LeadStatus = "new" | "attempted_contact" | "contacted" | "qualified" | "converted" | "lost";
+
 type LeadsResponse = {
   ok: boolean;
   leads: Lead[];
@@ -50,6 +55,7 @@ type LeadsResponse = {
 type StatsResponse = {
   ok: boolean;
   new: number;
+  attempted_contact: number;
   contacted: number;
   qualified: number;
   converted: number;
@@ -67,6 +73,29 @@ type CreateLeadBody = {
   urgency?: "low" | "medium" | "high";
   notes?: string;
 };
+
+type ApiErrorResponse = { ok?: boolean; error?: string };
+type UrgencyValue = "low" | "medium" | "high";
+type RangePreset = "7d" | "30d" | "month" | "custom";
+
+function isUrgencyValue(value: string): value is UrgencyValue {
+  return value === "low" || value === "medium" || value === "high";
+}
+
+function isRangePreset(value: string): value is RangePreset {
+  return value === "7d" || value === "30d" || value === "month" || value === "custom";
+}
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+function responseErrorMessage(value: LeadsResponse | StatsResponse | ApiErrorResponse | null) {
+  if (value && typeof value === "object" && "error" in value && typeof value.error === "string") {
+    return value.error;
+  }
+  return null;
+}
 
 function timeAgo(iso: string) {
   const d = new Date(iso);
@@ -106,6 +135,28 @@ function urgencyStyle(urgency: string | null | undefined) {
   };
 }
 
+function statusLabel(status: string | null | undefined) {
+  const s = (status ?? "").toLowerCase();
+  if (s === "new") return "New";
+  if (s === "attempted_contact") return "Attempted to Contact";
+  if (s === "contacted") return "Contacted";
+  if (s === "qualified") return "Qualified";
+  if (s === "converted") return "Won";
+  if (s === "lost") return "Lost";
+  return "Unknown";
+}
+
+function statusVariant(status: string | null | undefined) {
+  const s = (status ?? "").toLowerCase();
+  if (s === "new") return "secondary" as const;
+  if (s === "attempted_contact") return "warning" as const;
+  if (s === "contacted") return "info" as const;
+  if (s === "qualified") return "accent" as const;
+  if (s === "converted") return "success" as const;
+  if (s === "lost") return "danger" as const;
+  return "secondary" as const;
+}
+
 function useDebounced<T>(value: T, delayMs: number) {
   const [debounced, setDebounced] = React.useState(value);
   React.useEffect(() => {
@@ -128,16 +179,14 @@ export function LeadsDashboard() {
   const [leadNeedType, setLeadNeedType] = React.useState("");
   const [leadSource, setLeadSource] = React.useState("");
   const [leadSourceUrl, setLeadSourceUrl] = React.useState("");
-  const [leadUrgency, setLeadUrgency] = React.useState<"low" | "medium" | "high">("medium");
+  const [leadUrgency, setLeadUrgency] = React.useState<UrgencyValue>("medium");
   const [leadNotes, setLeadNotes] = React.useState("");
 
   const [status, setStatus] = React.useState("all");
   const [urgency, setUrgency] = React.useState("all");
   const [source, setSource] = React.useState("all");
 
-  const [rangePreset, setRangePreset] = React.useState<
-    "7d" | "30d" | "month" | "custom"
-  >("7d");
+  const [rangePreset, setRangePreset] = React.useState<RangePreset>("7d");
   const [customStart, setCustomStart] = React.useState("");
   const [customEnd, setCustomEnd] = React.useState("");
 
@@ -190,10 +239,10 @@ export function LeadsDashboard() {
     setLoading(true);
     try {
       const res = await fetch(`/api/leads?${params.toString()}`);
-      const json = (await res.json().catch(() => ({}))) as any;
+      const json = (await res.json().catch(() => null)) as LeadsResponse | ApiErrorResponse | null;
 
       if (!res.ok || !json?.ok) {
-        setLeadsError(json?.error ?? `Failed to load leads (${res.status})`);
+        setLeadsError(responseErrorMessage(json) ?? `Failed to load leads (${res.status})`);
         setData({ ok: false, leads: [], total: 0, page, totalPages: 1, sources: [] });
         return;
       }
@@ -221,10 +270,10 @@ export function LeadsDashboard() {
 
   const fetchStats = React.useCallback(async () => {
     const res = await fetch(`/api/leads/stats`);
-    const json = (await res.json().catch(() => ({}))) as any;
+    const json = (await res.json().catch(() => null)) as StatsResponse | ApiErrorResponse | null;
 
     if (!res.ok || !json?.ok) {
-      setStatsError(json?.error ?? `Failed to load stats (${res.status})`);
+      setStatsError(responseErrorMessage(json) ?? `Failed to load stats (${res.status})`);
       setStats(null);
       return;
     }
@@ -253,6 +302,7 @@ export function LeadsDashboard() {
   const statusOptions: SelectOption[] = [
     { value: "all", label: "All Statuses" },
     { value: "new", label: "New" },
+    { value: "attempted_contact", label: "Attempted to Contact" },
     { value: "contacted", label: "Contacted" },
     { value: "qualified", label: "Qualified" },
     { value: "converted", label: "Converted" },
@@ -282,7 +332,7 @@ export function LeadsDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ assignToMe: true }),
       });
-      const json = (await res.json().catch(() => ({}))) as any;
+      const json = (await res.json().catch(() => null)) as ApiErrorResponse | null;
 
       if (!res.ok || !json?.ok) {
         push({
@@ -298,12 +348,13 @@ export function LeadsDashboard() {
         description: "This lead has been assigned to you.",
         variant: "default",
       });
+      markChecklistProgress("assignedLead");
 
       fetchLeads();
-    } catch (e: any) {
+    } catch (e: unknown) {
       push({
         title: "Assignment failed",
-        description: e?.message ?? "Unknown error",
+        description: messageFromError(e),
         variant: "danger",
       });
     }
@@ -348,7 +399,7 @@ export function LeadsDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await res.json().catch(() => ({}))) as any;
+      const json = (await res.json().catch(() => null)) as ApiErrorResponse | null;
 
       if (!res.ok || !json?.ok) {
         setCreateError(json?.error ?? `Failed to create lead (${res.status})`);
@@ -359,6 +410,7 @@ export function LeadsDashboard() {
         title: "Lead created",
         description: `${payload.name} has been added to Leads`,
       });
+      markChecklistProgress("firstLead");
 
       setNewLeadOpen(false);
       resetNewLeadForm();
@@ -468,7 +520,7 @@ export function LeadsDashboard() {
               <div className="text-sm font-medium text-zinc-900">Urgency</div>
               <Select
                 value={leadUrgency}
-                onChange={(e) => setLeadUrgency(e.target.value as any)}
+                onChange={(e) => setLeadUrgency(isUrgencyValue(e.target.value) ? e.target.value : "medium")}
                 options={[
                   { value: "low", label: "Low" },
                   { value: "medium", label: "Medium" },
@@ -534,7 +586,7 @@ export function LeadsDashboard() {
           <div className="md:col-span-2">
             <Select
               value={rangePreset}
-              onChange={(e) => setRangePreset(e.target.value as any)}
+              onChange={(e) => setRangePreset(isRangePreset(e.target.value) ? e.target.value : "7d")}
               options={rangeOptions}
             />
           </div>
@@ -546,7 +598,11 @@ export function LeadsDashboard() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search name/email/phone"
                 className="pl-8"
+                aria-label="Search leads by name, email, or phone number"
               />
+              <div className="absolute right-2.5 top-2.5">
+                <HelpTip text="Search by name, email, or phone number." />
+              </div>
             </div>
           </div>
           <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
@@ -564,10 +620,12 @@ export function LeadsDashboard() {
               onClick={() => setNewLeadOpen(true)}
               className="hidden md:inline-flex"
               style={{ backgroundColor: "#40E0D0", color: "#062925" }}
+              data-tour="new-lead-button"
             >
               <span className="mr-2">+</span>
               <span>New Lead</span>
             </Button>
+            <HelpTip text="Click here to manually add a new lead." />
             <Button
               variant={view === "grid" ? "secondary" : "outline"}
               size="icon"
@@ -604,25 +662,35 @@ export function LeadsDashboard() {
             </div>
           ) : null}
         </div>
+        <div className="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+          <HelpTip text="Filter leads by status, urgency, or source." />
+          <span>Use filters to narrow the list.</span>
+        </div>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Lead Overview</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Lead Overview</CardTitle>
+            <HelpTip text="Total number of leads in this status." />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-white" variant="secondary">
               {`${stats?.new ?? 0} New`}
             </Badge>
-            <Badge className="bg-white" variant="secondary">
+            <Badge className="bg-white" variant="warning">
+              {`${stats?.attempted_contact ?? 0} Attempted`}
+            </Badge>
+            <Badge className="bg-white" variant="info">
               {`${stats?.contacted ?? 0} Contacted`}
             </Badge>
-            <Badge className="bg-white" variant="secondary">
+            <Badge className="bg-white" variant="accent">
               {`${stats?.qualified ?? 0} Qualified`}
             </Badge>
-            <Badge className="bg-white" variant="secondary">
+            <Badge className="bg-white" variant="success">
               {`${stats?.converted ?? 0} Won`}
             </Badge>
-            <Badge className="bg-white" variant="secondary">
+            <Badge className="bg-white" variant="danger">
               {`${stats?.lost ?? 0} Lost`}
             </Badge>
           </div>
@@ -641,8 +709,22 @@ export function LeadsDashboard() {
             : "space-y-3"
         )}
       >
+        {!loading && leads.length === 0 ? (
+          <Card className="sm:col-span-2 lg:col-span-3">
+            <CardContent className="p-8 text-center">
+              <p className="mb-4 text-sm text-zinc-600">
+                No leads yet. Leads will appear here automatically from your website form and referral sources.
+              </p>
+              <Button type="button" onClick={() => setNewLeadOpen(true)}>
+                Add Your First Lead
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {leads.map((lead) => {
           const u = urgencyStyle(lead.urgency);
+          const leadStatus = ((lead.status ?? "new").toLowerCase() as LeadStatus);
           return (
             <Card
               key={lead.id}
@@ -653,43 +735,72 @@ export function LeadsDashboard() {
                 view === "list" ? "overflow-hidden" : ""
               )}
             >
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <span className={cn("h-2.5 w-2.5 rounded-full", u.dot)} />
-                      <div className="text-sm font-semibold text-zinc-900">
+                      <div className="text-base font-semibold leading-5 text-zinc-900">
                         {lead.name}
                       </div>
-                      <Badge variant={u.label === "High" ? "danger" : u.label === "Low" ? "success" : "warning"}>
+                      <Badge variant={statusVariant(leadStatus)} className="px-2.5 py-0.5 text-[12px]">
+                        {statusLabel(leadStatus)}
+                      </Badge>
+                      <Badge
+                        variant={u.label === "High" ? "danger" : u.label === "Low" ? "success" : "warning"}
+                        className="px-2.5 py-0.5 text-[12px]"
+                      >
                         {u.label}
                       </Badge>
+                      <HelpTip text="High priority leads should be contacted first." />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="secondary" className="px-2.5 py-0.5 text-[12px]">
+                            Score {lead.qualification_score ?? 0}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs bg-zinc-900 text-zinc-50">
+                          <p>AI-calculated quality score (0-100). Higher means a better match.</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                    <div className="mt-1 text-xs text-zinc-600">
+                    <div className="text-sm leading-5 text-zinc-600">
                       {lead.email ?? ""}{lead.email && lead.phone ? " • " : ""}{lead.phone ?? ""}
                     </div>
                   </div>
-                  <div className="text-xs text-zinc-600">{timeAgo(lead.created_at)}</div>
+                  <div className="shrink-0 text-xs leading-5 text-zinc-600">{timeAgo(lead.created_at)}</div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-sm text-zinc-900">
+              <CardContent className="space-y-2.5 pt-0">
+                <div className="text-sm leading-6 text-zinc-900">
                   <span className="font-medium">Need:</span> {lead.need_type ?? "—"}
                 </div>
-                <div className="text-sm text-zinc-700">
+                <div className="text-sm leading-6 text-zinc-700">
                   <span className="font-medium">Area:</span> {lead.location ?? "—"}
                 </div>
-                <div className="text-xs text-zinc-600">
+                <div className="text-sm leading-5 text-zinc-600">
                   Source: {lead.source ?? "—"}
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button asChild variant="outline" size="sm">
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button asChild variant="outline" size="sm" className="h-9 px-3 text-sm">
                     <Link href={`/leads/${lead.id}`}>View Details</Link>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => assignToMe(lead.id)}>
-                    Assign to Me
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-9 px-3 text-sm"
+                        onClick={() => assignToMe(lead.id)}
+                      >
+                        Assign to Me
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="bg-zinc-900 text-zinc-50">
+                      <p>Assign this lead to yourself for follow-up.</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </CardContent>
             </Card>

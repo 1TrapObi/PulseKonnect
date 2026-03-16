@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
 
 type Settings = {
@@ -17,6 +18,13 @@ type Settings = {
   quiet_hours_end: string | null;
   daily_digest_time: string | null;
 };
+
+type BooleanSettingKey =
+  | "notify_high_priority_leads"
+  | "notify_lead_assignments"
+  | "notify_status_updates"
+  | "notify_reminders"
+  | "notify_daily_summary";
 
 export function NotificationSettingsCard() {
   const [settings, setSettings] = React.useState<Settings | null>(null);
@@ -49,11 +57,9 @@ export function NotificationSettingsCard() {
     }
   }
 
-  function toggle<K extends keyof Settings>(k: K) {
+  function toggle(k: BooleanSettingKey) {
     if (!settings) return;
-    if (typeof settings[k] === "boolean") {
-      setSettings({ ...settings, [k]: !(settings[k] as any) } as any);
-    }
+    setSettings({ ...settings, [k]: !settings[k] });
   }
 
   if (!settings) {
@@ -63,11 +69,17 @@ export function NotificationSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Email & Dashboard Notifications</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle>Email & Dashboard Notifications</CardTitle>
+          <HelpTip text="Receive email when new leads arrive." />
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <div className="text-sm font-medium text-zinc-900">Email notifications</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
+            <span>Email notifications</span>
+            <HelpTip text="Receive email when new leads arrive." />
+          </div>
           <label className="flex items-center justify-between gap-4 rounded-md border bg-white p-3 text-sm">
             <span>High-priority leads</span>
             <input

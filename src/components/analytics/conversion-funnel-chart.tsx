@@ -9,6 +9,7 @@ export type FunnelDatum = { status: string; count: number; pct: number };
 function label(status: string) {
   const s = status.toLowerCase();
   if (s === "new") return "New";
+  if (s === "attempted_contact") return "Attempted to Contact";
   if (s === "contacted") return "Contacted";
   if (s === "qualified") return "Qualified";
   if (s === "converted") return "Converted";

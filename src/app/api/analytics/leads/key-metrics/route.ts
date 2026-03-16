@@ -3,6 +3,16 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
 import { getAvgResponseTime } from "@/lib/analytics/lead-metrics";
 
+type UserRow = { organization_id: string | null };
+type FastestLeadRow = { id: string; response_time_hours: number };
+type ActivityRow = { user_id: string | null; notes: string | null; created_at: string };
+type NotesShape = { to?: string };
+type ResponderRow = { email: string | null };
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
 function parseRange(url: URL) {
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
@@ -45,12 +55,12 @@ export async function GET(request: Request) {
       );
     }
 
-    const orgId = String((userRow as any).organization_id);
+    const orgId = String((userRow as UserRow).organization_id);
 
     const avgResponseTimeHours = await getAvgResponseTime(user.id, startDate, endDate);
 
     // Fastest response: smallest response_time_hours in range.
-    // Associate responder via the activity that changed status new -> contacted.
+    // Associate responder via the earliest activity that moved the lead to contacted.
     const { data: fastestLead } = await admin
       .from("leads")
       .select("id,response_time_hours")
@@ -64,9 +74,10 @@ export async function GET(request: Request) {
 
     let fastestResponse: { hours: number; userEmail: string | null } | null = null;
 
-    if (fastestLead?.id && fastestLead?.response_time_hours != null) {
-      const leadId = String((fastestLead as any).id);
-      const hours = Number((fastestLead as any).response_time_hours);
+    const lead = fastestLead as FastestLeadRow | null;
+    if (lead?.id && lead?.response_time_hours != null) {
+      const leadId = String(lead.id);
+      const hours = Number(lead.response_time_hours);
 
       const { data: acts } = await admin
         .from("activities")
@@ -76,11 +87,11 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: true });
 
       let responderUserId: string | null = null;
-      for (const a of acts ?? []) {
+      for (const a of (acts ?? []) as ActivityRow[]) {
         try {
-          const notes = (a as any).notes ? JSON.parse(String((a as any).notes)) : null;
-          if (notes?.from === "new" && notes?.to === "contacted") {
-            responderUserId = (a as any).user_id ? String((a as any).user_id) : null;
+          const notes = a.notes ? (JSON.parse(String(a.notes)) as NotesShape) : null;
+          if (notes?.to === "contacted") {
+            responderUserId = a.user_id ? String(a.user_id) : null;
             break;
           }
         } catch {
@@ -96,7 +107,8 @@ export async function GET(request: Request) {
           .eq("id", responderUserId)
           .eq("organization_id", orgId)
           .maybeSingle();
-        email = responder?.email ? String((responder as any).email) : null;
+        const responderRow = responder as ResponderRow | null;
+        email = responderRow?.email ? String(responderRow.email) : null;
       }
 
       if (Number.isFinite(hours)) {
@@ -109,7 +121,7 @@ export async function GET(request: Request) {
       avgResponseTimeHours,
       fastestResponse,
     });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: messageFromError(e) }, { status: 500 });
   }
 }

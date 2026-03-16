@@ -2,10 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HelpTip } from "@/components/ui/help-tip";
 import {
   Dialog,
   DialogClose,
@@ -20,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { markChecklistProgress } from "@/lib/onboarding/local-progress";
 
 type Lead = {
   id: string;
@@ -40,6 +44,8 @@ type Lead = {
   response_time_hours?: number | null;
   lost_reason?: string | null;
 };
+
+type LeadStatus = "new" | "attempted_contact" | "contacted" | "qualified" | "converted" | "lost";
 
 type UserRow = { id: string; email: string; role: string };
 
@@ -70,6 +76,11 @@ type Reminder = {
   user_id: string | null;
 };
 
+type StatusPayload = {
+  status: string;
+  reason?: string;
+};
+
 function timeAgo(iso: string) {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
@@ -95,6 +106,7 @@ function urgencyVariant(u: string | null | undefined) {
 
 const statusOptions: SelectOption[] = [
   { value: "new", label: "New" },
+  { value: "attempted_contact", label: "Attempted to Contact" },
   { value: "contacted", label: "Contacted" },
   { value: "qualified", label: "Qualified" },
   { value: "converted", label: "Converted" },
@@ -114,12 +126,34 @@ const reminderTypeOptions: SelectOption[] = [
   { value: "Document request", label: "Document request" },
 ];
 
+function statusLabel(status: string | null | undefined) {
+  const s = (status ?? "").toLowerCase();
+  if (s === "new") return "New";
+  if (s === "attempted_contact") return "Attempted to Contact";
+  if (s === "contacted") return "Contacted";
+  if (s === "qualified") return "Qualified";
+  if (s === "converted") return "Won";
+  if (s === "lost") return "Lost";
+  return "Unknown";
+}
+
+function statusVariant(status: string | null | undefined) {
+  const s = (status ?? "").toLowerCase();
+  if (s === "new") return "secondary" as const;
+  if (s === "attempted_contact") return "warning" as const;
+  if (s === "contacted") return "info" as const;
+  if (s === "qualified") return "accent" as const;
+  if (s === "converted") return "success" as const;
+  if (s === "lost") return "danger" as const;
+  return "secondary" as const;
+}
+
 function activityLabel(a: Activity) {
   if (a.action === "lead_status_changed") {
     try {
       const n = a.notes ? JSON.parse(a.notes) : null;
-      if (n?.from && n?.to) {
-        return `Status updated from ${String(n.from)} to ${String(n.to)}`;
+      if (n?.to) {
+        return `Status changed to ${statusLabel(String(n.to))}`;
       }
     } catch {
       // noop
@@ -227,6 +261,7 @@ export function LeadDetails({
       }
       await refreshLead();
       await fetchActivities();
+      markChecklistProgress("assignedLead");
     } finally {
       setLoading(false);
     }
@@ -235,7 +270,7 @@ export function LeadDetails({
   async function setStatus(next: string) {
     setLoading(true);
     try {
-      const payload: any = { status: next };
+      const payload: StatusPayload = { status: next };
       if (next === "lost") payload.reason = lostReason;
 
       const res = await fetch(`/api/leads/${lead.id}/status`, {
@@ -252,6 +287,7 @@ export function LeadDetails({
 
       await refreshLead();
       await fetchActivities();
+      markChecklistProgress("statusUpdated");
     } finally {
       setLoading(false);
     }
@@ -276,6 +312,7 @@ export function LeadDetails({
       setNoteContent("");
       await fetchNotes();
       await fetchActivities();
+      markChecklistProgress("addedNote");
     } finally {
       setLoading(false);
     }
@@ -338,9 +375,7 @@ export function LeadDetails({
       ? `Responded in ${lead.response_time_hours} hours`
       : null;
 
-  const statusValue = (lead.status ?? "new").toLowerCase();
-
-  const nextStatusNeedsConfirm = pendingStatus === "converted" || pendingStatus === "lost";
+  const statusValue = ((lead.status ?? "new").toLowerCase() as LeadStatus);
 
   return (
     <div className="space-y-4">
@@ -360,6 +395,7 @@ export function LeadDetails({
               {lead.phone ?? ""}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-600">
+              <Badge variant={statusVariant(lead.status)}>{statusLabel(lead.status)}</Badge>
               <Badge variant={urgencyVariant(lead.urgency)}>
                 {(lead.urgency ?? "medium").toUpperCase()}
               </Badge>
@@ -384,6 +420,13 @@ export function LeadDetails({
         </TabsList>
 
         <TabsContent value="overview">
+          <Alert className="mb-4 border-blue-200 bg-blue-50 text-blue-950">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Tip</AlertTitle>
+            <AlertDescription>
+              Update the lead status to Attempted to Contact after leaving a voicemail or sending an email.
+            </AlertDescription>
+          </Alert>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -419,11 +462,17 @@ export function LeadDetails({
 
             <Card>
               <CardHeader>
-                <CardTitle>Assignment & Status</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Assignment & Status</CardTitle>
+                  <HelpTip text="Assign lead to a team member for follow-up." />
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">Assign</div>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span>Assign</span>
+                    <HelpTip text="Assign lead to a team member for follow-up." />
+                  </div>
                   <div className="grid gap-2 md:grid-cols-3">
                     <div className="md:col-span-2">
                       <Select
@@ -444,8 +493,12 @@ export function LeadDetails({
                 </div>
 
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">Status</div>
-                  <div className="grid gap-2 md:grid-cols-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span>Status</span>
+                    <HelpTip text="Update lead status as you progress through follow-up." />
+                    <HelpTip text="Use Attempted to Contact when you've called or emailed but haven't connected yet." />
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3" data-tour="lead-status-dropdown">
                     <div className="md:col-span-2">
                       <Select
                         value={statusValue}
@@ -547,7 +600,10 @@ export function LeadDetails({
         <TabsContent value="activity">
           <Card>
             <CardHeader>
-              <CardTitle>Activity Timeline</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle>Activity Timeline</CardTitle>
+                <HelpTip text="History of all actions taken on this lead." />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="max-h-[420px] space-y-3 overflow-auto rounded-md border bg-white p-3">
@@ -575,7 +631,10 @@ export function LeadDetails({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Add Note</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Add Note</CardTitle>
+                  <HelpTip text="Add internal notes about this lead (not visible to client)." />
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Textarea

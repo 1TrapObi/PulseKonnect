@@ -16,7 +16,7 @@ function NavLink({
   collapsed,
 }: {
   href: string;
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
   collapsed?: boolean;
 }) {
@@ -90,7 +90,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         >
           <div className="mt-1 space-y-1">
             <NavLink href="/leads" collapsed={collapsed}>
-              All Leads
+              <span data-tour="sidebar-leads">All Leads</span>
             </NavLink>
             <NavLink href="/analytics/leads" collapsed={collapsed}>
               Analytics
@@ -149,7 +149,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         <NavLink
           key={item.href}
           href={item.href}
-          icon={(item as any).icon}
+          icon={item.icon}
           collapsed={collapsed}
         >
           {item.label}

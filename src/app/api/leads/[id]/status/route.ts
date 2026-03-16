@@ -2,9 +2,37 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
 import { createNotificationAndMaybeEnqueueEmail } from "@/lib/notifications/create";
 
-const ORDER = ["new", "contacted", "qualified", "converted"] as const;
+const ORDER = ["new", "attempted_contact", "contacted", "qualified", "converted"] as const;
+type OrderedStatus = (typeof ORDER)[number];
+
 const FINAL = new Set(["converted", "lost"]);
 const LOST_REASONS = new Set(["No Response", "Declined Services", "Out of Area", "Other"]);
+
+type LeadRow = {
+  id: string;
+  status: string | null;
+  created_at: string;
+  contacted_at: string | null;
+  assigned_to: string | null;
+  name: string | null;
+};
+
+type PatchBody = {
+  status: string;
+  lost_reason: string | null;
+  contacted_at?: string;
+  response_time_hours?: number;
+};
+
+type OwnerRow = { id: string; email: string | null };
+
+function isOrderedStatus(s: string): s is OrderedStatus {
+  return ORDER.includes(s as OrderedStatus);
+}
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 function normalizeStatus(s: string) {
   return s.trim().toLowerCase();
@@ -13,8 +41,8 @@ function normalizeStatus(s: string) {
 function isValidTransition(from: string, to: string) {
   if (from === to) return true;
   if (to === "lost") return from !== "converted";
-  const fromIdx = ORDER.indexOf(from as any);
-  const toIdx = ORDER.indexOf(to as any);
+  const fromIdx = isOrderedStatus(from) ? ORDER.indexOf(from) : -1;
+  const toIdx = isOrderedStatus(to) ? ORDER.indexOf(to) : -1;
   if (fromIdx === -1 || toIdx === -1) return false;
   return toIdx === fromIdx + 1;
 }
@@ -25,7 +53,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const nextStatus = normalizeStatus(String(body.status ?? ""));
     const reason = body.reason ? String(body.reason) : null;
 
@@ -64,18 +92,20 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: "Missing organization" }, { status: 500 });
     }
 
-    const { data: lead, error: leadErr } = await admin
+    const { data: leadData, error: leadErr } = await admin
       .from("leads")
       .select("id,status,created_at,contacted_at,assigned_to,name")
       .eq("id", id)
       .eq("organization_id", orgId)
       .maybeSingle();
 
+    const lead = leadData as LeadRow | null;
+
     if (leadErr || !lead) {
       return NextResponse.json({ ok: false, error: "Lead not found" }, { status: 404 });
     }
 
-    const currentStatus = normalizeStatus(String((lead as any).status ?? "new"));
+    const currentStatus = normalizeStatus(String(lead.status ?? "new"));
 
     if (!isValidTransition(currentStatus, nextStatus)) {
       return NextResponse.json(
@@ -91,17 +121,15 @@ export async function PATCH(
       );
     }
 
-    const patch: Record<string, any> = { status: nextStatus };
+    const patch: PatchBody = { status: nextStatus, lost_reason: null };
 
     if (nextStatus === "lost") {
       patch.lost_reason = reason;
-    } else {
-      patch.lost_reason = null;
     }
 
-    // response time tracking when New -> Contacted
-    if (currentStatus === "new" && nextStatus === "contacted") {
-      const createdAt = new Date(String((lead as any).created_at));
+    // response time tracking when first reaching Contacted
+    if (!lead.contacted_at && nextStatus === "contacted") {
+      const createdAt = new Date(lead.created_at);
       const contactedAt = new Date();
       patch.contacted_at = contactedAt.toISOString();
       const hours = (contactedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
@@ -127,7 +155,7 @@ export async function PATCH(
       },
     ]);
 
-    const assignedTo = (lead as any).assigned_to as string | null;
+    const assignedTo = lead.assigned_to;
     if (assignedTo && assignedTo !== user.id) {
       const { data: ownerRow } = await admin
         .from("users")
@@ -136,7 +164,8 @@ export async function PATCH(
         .eq("organization_id", orgId)
         .maybeSingle();
 
-      if (ownerRow) {
+      const owner = ownerRow as OwnerRow | null;
+      if (owner) {
         await createNotificationAndMaybeEnqueueEmail({
           organizationId: orgId,
           userId: assignedTo,
@@ -144,15 +173,15 @@ export async function PATCH(
           reminderId: null,
           type: "status_changed",
           title: "Lead status updated",
-          message: `${(lead as any).name ?? "A lead"} status changed: ${currentStatus} → ${nextStatus}`,
+          message: `${lead.name ?? "A lead"} status changed: ${currentStatus} → ${nextStatus}`,
           link: `/leads/${id}`,
-          emailTo: (ownerRow as any).email ?? null,
+          emailTo: owner.email ?? null,
         });
       }
     }
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: messageFromError(e) }, { status: 500 });
   }
 }

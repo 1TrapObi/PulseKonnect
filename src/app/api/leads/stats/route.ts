@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
 
-const STATUSES = ["new", "contacted", "qualified", "converted", "lost"] as const;
+const STATUSES = ["new", "attempted_contact", "contacted", "qualified", "converted", "lost"] as const;
+type StatusRow = { status: string | null };
+
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 export async function GET() {
   try {
@@ -43,15 +48,15 @@ export async function GET() {
     const counts: Record<string, number> = {};
     for (const s of STATUSES) counts[s] = 0;
 
-    for (const row of data ?? []) {
-      const s = String((row as any).status ?? "").toLowerCase();
+    for (const row of (data ?? []) as StatusRow[]) {
+      const s = String(row.status ?? "").toLowerCase();
       if (s in counts) counts[s] += 1;
     }
 
     return NextResponse.json({ ok: true, ...counts });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Unknown error" },
+      { ok: false, error: messageFromError(e) },
       { status: 500 }
     );
   }

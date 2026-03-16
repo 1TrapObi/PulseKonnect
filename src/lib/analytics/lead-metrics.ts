@@ -30,6 +30,12 @@ export type SourcePerformanceRow = {
   conversionRate: number;
 };
 
+type OrgRow = { organization_id: string | null };
+type SourceRow = { source: string | null };
+type ResponseTimeRow = { response_time_hours: number | null };
+type CreatedAtRow = { created_at: string };
+type SourceStatusRow = { source: string | null; status: string | null };
+
 export function pctChange(current: number, previous: number) {
   if (previous === 0) {
     if (current === 0) return 0;
@@ -58,7 +64,8 @@ async function getOrgIdForUser(userId: string) {
   if (error || !data?.organization_id) {
     throw new Error(error?.message ?? "Missing organization");
   }
-  return String((data as any).organization_id);
+  const org = data as OrgRow;
+  return String(org.organization_id);
 }
 
 export async function getTotalLeads(userId: string, startDate: string, endDate: string) {
@@ -134,8 +141,8 @@ export async function getLeadsBySource(userId: string, startDate: string, endDat
   if (error) throw new Error(error.message);
 
   const map = new Map<string, number>();
-  for (const row of data ?? []) {
-    const src = String((row as any).source ?? "Unknown").trim() || "Unknown";
+  for (const row of (data ?? []) as SourceRow[]) {
+    const src = String(row.source ?? "Unknown").trim() || "Unknown";
     map.set(src, (map.get(src) ?? 0) + 1);
   }
 
@@ -145,7 +152,7 @@ export async function getLeadsBySource(userId: string, startDate: string, endDat
 }
 
 export async function getConversionFunnel(userId: string, startDate: string, endDate: string): Promise<FunnelRow[]> {
-  const stages = ["new", "contacted", "qualified", "converted"];
+  const stages = ["new", "attempted_contact", "contacted", "qualified", "converted"];
   const counts = await Promise.all(stages.map((s) => getStatusCount(userId, startDate, endDate, s)));
   const total = counts[0] ?? 0;
 
@@ -179,8 +186,8 @@ export async function getAvgResponseTime(userId: string, startDate: string, endD
 
   if (error) throw new Error(error.message);
 
-  const vals = (data ?? [])
-    .map((r: any) => Number(r.response_time_hours))
+  const vals = ((data ?? []) as ResponseTimeRow[])
+    .map((r) => Number(r.response_time_hours))
     .filter((n) => Number.isFinite(n));
 
   if (!vals.length) return null;
@@ -203,8 +210,8 @@ export async function getLeadTrendDaily(userId: string, startDate: string, endDa
   if (error) throw new Error(error.message);
 
   const map = new Map<string, number>();
-  for (const row of data ?? []) {
-    const iso = String((row as any).created_at);
+  for (const row of (data ?? []) as CreatedAtRow[]) {
+    const iso = String(row.created_at);
     const d = new Date(iso);
     const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
       d.getUTCDate()
@@ -230,9 +237,9 @@ export async function getSourcePerformance(userId: string, startDate: string, en
 
   const stats = new Map<string, { total: number; qualified: number; converted: number }>();
 
-  for (const row of data ?? []) {
-    const source = String((row as any).source ?? "Unknown").trim() || "Unknown";
-    const status = String((row as any).status ?? "").toLowerCase();
+  for (const row of (data ?? []) as SourceStatusRow[]) {
+    const source = String(row.source ?? "Unknown").trim() || "Unknown";
+    const status = String(row.status ?? "").toLowerCase();
 
     const s = stats.get(source) ?? { total: 0, qualified: 0, converted: 0 };
     s.total += 1;
