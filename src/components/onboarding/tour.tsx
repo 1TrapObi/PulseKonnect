@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import introJs from "intro.js";
 import "intro.js/minified/introjs.min.css";
 
 import { hasSeenTour, setTourSeen } from "@/lib/onboarding/local-progress";
@@ -77,7 +76,8 @@ export function requestOnboardingTourStart() {
 export function OnboardingTour() {
   const startedRef = React.useRef(false);
 
-  const startTour = React.useCallback((force = false) => {
+  const startTour = React.useCallback(async (force = false) => {
+    if (typeof window === "undefined") return;
     if (startedRef.current) return;
 
     const steps = TOUR_STEPS.map(toIntroStep).filter((s): s is Record<string, unknown> => Boolean(s));
@@ -85,6 +85,7 @@ export function OnboardingTour() {
 
     startedRef.current = true;
 
+    const { default: introJs } = await import("intro.js");
     const tour = introJs();
     tour.setOptions({
       steps,
@@ -114,11 +115,15 @@ export function OnboardingTour() {
   }, []);
 
   React.useEffect(() => {
-    const onStartRequest = () => startTour(true);
+    const onStartRequest = () => {
+      void startTour(true);
+    };
     window.addEventListener(START_ONBOARDING_TOUR_EVENT, onStartRequest);
 
     if (!hasSeenTour()) {
-      window.setTimeout(() => startTour(false), 500);
+      window.setTimeout(() => {
+        void startTour(false);
+      }, 500);
     }
 
     return () => {
