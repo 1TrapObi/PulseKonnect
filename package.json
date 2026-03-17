@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker:notifications": "tsx src/lib/queues/workers/notification-worker.ts"
+    "worker:notifications": "tsx src/lib/queues/workers/notification-worker.ts",
+    "import:clients": "tsx scripts/import-clients-from-xlsx.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -29,6 +31,7 @@
     "ioredis": "^5.8.2",
     "lucide-react": "^0.560.0",
     "next": "16.0.10",
+    "puppeteer": "^24.39.1",
     "radix-ui": "^1.4.3",
     "react": "19.2.1",
     "react-dom": "19.2.1",
@@ -39,6 +42,7 @@
     "swr": "^2.3.3",
     "tailwind-merge": "^3.4.0",
     "uuid": "^11.1.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.1.13",
     "zustand": "^5.0.9"
   },

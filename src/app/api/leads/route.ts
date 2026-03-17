@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     let query = admin
       .from("leads")
       .select(
-        "id,name,email,phone,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,created_at",
+        "id,name,email,phone,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,quality_score,priority,ai_reasoning,created_at",
         { count: "exact" }
       )
       .eq("organization_id", orgId)

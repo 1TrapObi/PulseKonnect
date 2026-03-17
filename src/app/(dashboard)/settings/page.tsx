@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 import { DashboardShell } from "@/components/shared/dashboard-shell";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { Select, type SelectOption } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastViewport, useToast } from "@/components/ui/toast";
 import { NotificationSettingsCard } from "@/components/notifications/notification-settings-card";
-import { LeadScraperSettingsCard } from "@/components/leads/lead-scraper-settings-card";
 import { LeadProfileTemplatesCard } from "@/components/leads/lead-profile-templates-card";
 import { CandidateScraperSettingsCard } from "@/components/candidates/candidate-scraper-settings-card";
 import { TeamSettingsCard } from "@/components/shared/team-settings-card";
@@ -117,6 +117,7 @@ function TabPanel({ title, description }: { title: string; description: string }
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [tab, setTab] = React.useState<TabValue>("organization");
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
 
@@ -185,6 +186,18 @@ export default function SettingsPage() {
     }
   }
 
+  const handleTabChange = React.useCallback(
+    (nextTab: TabValue) => {
+      if (nextTab === "lead-scraper") {
+        router.push("/settings/scrapers");
+        return;
+      }
+
+      setTab(nextTab);
+    },
+    [router]
+  );
+
   return (
     <DashboardShell title="Settings">
       <ToastViewport items={toasts} remove={remove} />
@@ -199,10 +212,10 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)} className="mt-4">
+      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as TabValue)} className="mt-4">
         <div className="sticky top-0 z-10 -mx-4 border-b bg-zinc-50 px-4 py-3 md:-mx-6 md:px-6">
           <div className="md:hidden">
-            <Select value={tab} onChange={(e) => setTab(e.target.value as TabValue)} options={tabOptions} />
+            <Select value={tab} onChange={(e) => handleTabChange(e.target.value as TabValue)} options={tabOptions} />
           </div>
 
           <TabsList className="hidden w-full flex-wrap justify-start gap-1 md:inline-flex">
@@ -366,10 +379,6 @@ export default function SettingsPage() {
 
           <TabsContent value="lead-templates">
             <LeadProfileTemplatesCard />
-          </TabsContent>
-
-          <TabsContent value="lead-scraper">
-            <LeadScraperSettingsCard />
           </TabsContent>
 
           <TabsContent value="candidate-scraper">

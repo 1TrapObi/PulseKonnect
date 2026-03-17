@@ -38,6 +38,9 @@ type Lead = {
   urgency: string | null;
   qualification_status?: string | null;
   qualification_score?: number | null;
+  quality_score?: number | null;
+  priority?: string | null;
+  ai_reasoning?: string | null;
   created_at: string;
 };
 
@@ -725,6 +728,7 @@ export function LeadsDashboard() {
         {leads.map((lead) => {
           const u = urgencyStyle(lead.urgency);
           const leadStatus = ((lead.status ?? "new").toLowerCase() as LeadStatus);
+          const displayScore = lead.quality_score ?? lead.qualification_score ?? 0;
           return (
             <Card
               key={lead.id}
@@ -756,11 +760,11 @@ export function LeadsDashboard() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Badge variant="secondary" className="px-2.5 py-0.5 text-[12px]">
-                            Score {lead.qualification_score ?? 0}
+                            Score {displayScore}
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8} className="max-w-xs bg-zinc-900 text-zinc-50">
-                          <p>AI-calculated quality score (0-100). Higher means a better match.</p>
+                          <p>{lead.ai_reasoning ?? "AI-calculated quality score (0-100). Higher means a better match."}</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -781,6 +785,11 @@ export function LeadsDashboard() {
                 <div className="text-sm leading-5 text-zinc-600">
                   Source: {lead.source ?? "—"}
                 </div>
+                {lead.priority ? (
+                  <div className="text-sm leading-5 text-zinc-600">
+                    Priority: {lead.priority}
+                  </div>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button asChild variant="outline" size="sm" className="h-9 px-3 text-sm">
