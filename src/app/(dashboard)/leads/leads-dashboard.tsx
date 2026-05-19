@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Grid3X3, List, Plus, Search } from "lucide-react";
 
 import { HelpTip } from "@/components/ui/help-tip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -24,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ToastViewport, useToast } from "@/components/ui/toast";
 import { markChecklistProgress } from "@/lib/onboarding/local-progress";
 import { cn } from "@/lib/utils";
+import { ImportLeadsModal } from "./import-leads-modal";
 
 type Lead = {
   id: string;
@@ -170,9 +173,15 @@ function useDebounced<T>(value: T, delayMs: number) {
 }
 
 export function LeadsDashboard() {
+  const router = useRouter();
   const [view, setView] = React.useState<"grid" | "list">("grid");
 
   const [newLeadOpen, setNewLeadOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [selectMode, setSelectMode] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [createError, setCreateError] = React.useState<string | null>(null);
   const [leadName, setLeadName] = React.useState("");
@@ -326,7 +335,16 @@ export function LeadsDashboard() {
     { value: "custom", label: "Custom" },
   ];
 
-  const leads = data?.leads ?? [];
+  const leads = React.useMemo(() => data?.leads ?? [], [data?.leads]);
+  const selectedCount = selectedIds.size;
+
+  const allOnPageSelected = React.useMemo(() => {
+    if (!leads.length) return false;
+    for (const lead of leads) {
+      if (!selectedIds.has(lead.id)) return false;
+    }
+    return true;
+  }, [leads, selectedIds]);
 
   async function assignToMe(leadId: string) {
     try {
@@ -424,8 +442,109 @@ export function LeadsDashboard() {
     }
   }
 
+  async function handleImportComplete(result: {
+    imported: number;
+    skipped: number;
+    duplicates: number;
+    errors: string[];
+  }) {
+    if (result.imported > 0) {
+      push({
+        title: "Import complete",
+        description: `Imported ${result.imported} leads. Skipped ${result.skipped}. Duplicates found: ${result.duplicates}.`,
+      });
+    } else {
+      push({
+        title: "Import finished",
+        description: `No leads imported. Skipped ${result.skipped}. Duplicates found: ${result.duplicates}.`,
+        variant: "default",
+      });
+    }
+
+    if (result.errors.length) {
+      push({
+        title: "Some rows failed",
+        description: result.errors[0] ?? "One or more rows could not be imported.",
+        variant: "default",
+      });
+    }
+
+    await fetchLeads();
+    await fetchStats();
+    router.refresh();
+  }
+
+  function toggleSelected(leadId: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(leadId);
+      else next.delete(leadId);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function selectAllOnPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const lead of leads) next.add(lead.id);
+      return next;
+    });
+  }
+
+  async function bulkDeleteSelected() {
+    if (!selectedIds.size) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await fetch("/api/leads/bulk-delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; deleted?: number; error?: string } | null;
+      if (!res.ok || !json?.ok) {
+        push({
+          title: "Delete failed",
+          description: json?.error ?? `Failed to delete leads (${res.status})`,
+          variant: "danger",
+        });
+        return;
+      }
+
+      push({
+        title: "Leads deleted",
+        description: `Deleted ${json.deleted ?? 0} lead(s).`,
+      });
+
+      setBulkDeleteOpen(false);
+      clearSelection();
+      setSelectMode(false);
+      await fetchLeads();
+      await fetchStats();
+      router.refresh();
+    } catch (e: unknown) {
+      push({
+        title: "Delete failed",
+        description: messageFromError(e),
+        variant: "danger",
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <ImportLeadsModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={handleImportComplete}
+      />
+
       <Dialog
         open={newLeadOpen}
         onOpenChange={(open) => {
@@ -555,6 +674,38 @@ export function LeadsDashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          setBulkDeleteOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete selected leads?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete {selectedCount} lead(s) and any related notes, reminders, and activities.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={bulkDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={() => void bulkDeleteSelected()}
+              disabled={bulkDeleting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {bulkDeleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {leadsError || statsError ? (
         <Card className="border-[#EF4444] bg-[#FEF2F2]">
           <CardHeader>
@@ -611,6 +762,28 @@ export function LeadsDashboard() {
           <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
+              variant="outline"
+              onClick={() => {
+                setSelectMode((prev) => {
+                  const next = !prev;
+                  if (!next) clearSelection();
+                  return next;
+                });
+              }}
+              className="hidden md:inline-flex"
+            >
+              {selectMode ? "Done" : "Select"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="hidden md:inline-flex"
+            >
+              Import Leads
+            </Button>
+            <Button
+              type="button"
               onClick={() => setNewLeadOpen(true)}
               size="icon"
               className="md:hidden"
@@ -665,6 +838,41 @@ export function LeadsDashboard() {
             </div>
           ) : null}
         </div>
+        {selectMode ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border bg-white p-2">
+            <div className="text-sm text-zinc-700">
+              Selected: <span className="font-semibold">{selectedCount}</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={allOnPageSelected ? clearSelection : selectAllOnPage}
+              disabled={!leads.length}
+            >
+              {allOnPageSelected ? "Clear page" : "Select page"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearSelection}
+              disabled={!selectedCount}
+            >
+              Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!selectedCount}
+              onClick={() => setBulkDeleteOpen(true)}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Delete selected
+            </Button>
+            <div className="ml-auto text-xs text-zinc-500">Deletion is organization-scoped.</div>
+          </div>
+        ) : null}
         <div className="mt-2 flex items-center gap-2 text-xs text-zinc-600">
           <HelpTip text="Filter leads by status, urgency, or source." />
           <span>Use filters to narrow the list.</span>
@@ -729,6 +937,7 @@ export function LeadsDashboard() {
           const u = urgencyStyle(lead.urgency);
           const leadStatus = ((lead.status ?? "new").toLowerCase() as LeadStatus);
           const displayScore = lead.quality_score ?? lead.qualification_score ?? 0;
+          const checked = selectedIds.has(lead.id);
           return (
             <Card
               key={lead.id}
@@ -743,6 +952,13 @@ export function LeadsDashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      {selectMode ? (
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => toggleSelected(lead.id, Boolean(value))}
+                          aria-label={`Select lead ${lead.name}`}
+                        />
+                      ) : null}
                       <span className={cn("h-2.5 w-2.5 rounded-full", u.dot)} />
                       <div className="text-base font-semibold leading-5 text-zinc-900">
                         {lead.name}
