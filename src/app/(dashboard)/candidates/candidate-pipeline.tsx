@@ -14,7 +14,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { MoreHorizontal, Star } from "lucide-react";
+import { MoreHorizontal, Plus, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ToastViewport, useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,36 @@ type CandidatesResponse = {
   positions: SelectOption[];
   licenses: SelectOption[];
   statuses: string[];
+};
+
+type CandidateForm = {
+  name: string;
+  email: string;
+  phone: string;
+  positionId: string;
+  licenseType: string;
+  licenseNumber: string;
+  experienceYears: string;
+  location: string;
+  currentEmployer: string;
+  source: string;
+  status: string;
+  notes: string;
+};
+
+const EMPTY_CANDIDATE_FORM: CandidateForm = {
+  name: "",
+  email: "",
+  phone: "",
+  positionId: "",
+  licenseType: "",
+  licenseNumber: "",
+  experienceYears: "",
+  location: "",
+  currentEmployer: "",
+  source: "Manual",
+  status: "new",
+  notes: "",
 };
 
 const STATUSES = [
@@ -249,6 +280,10 @@ export function CandidatePipeline() {
     toStatus: string;
   } | null>(null);
   const [confirmReason, setConfirmReason] = React.useState("");
+  const [newCandidateOpen, setNewCandidateOpen] = React.useState(false);
+  const [newCandidateSaving, setNewCandidateSaving] = React.useState(false);
+  const [newCandidateError, setNewCandidateError] = React.useState<string | null>(null);
+  const [newCandidate, setNewCandidate] = React.useState<CandidateForm>(EMPTY_CANDIDATE_FORM);
 
   const qs = React.useMemo(() => {
     const p = new URLSearchParams();
@@ -465,6 +500,56 @@ export function CandidatePipeline() {
     rejected: 0,
   };
 
+  const statusOptions: SelectOption[] = React.useMemo(
+    () => STATUSES.map((s) => ({ value: s.key, label: s.label })),
+    []
+  );
+
+  const candidatePositionOptions: SelectOption[] = React.useMemo(
+    () => [{ value: "", label: "No role selected" }, ...(data?.positions ?? [])],
+    [data?.positions]
+  );
+
+  async function createCandidate(e: React.FormEvent) {
+    e.preventDefault();
+    setNewCandidateError(null);
+
+    const name = newCandidate.name.trim();
+    if (!name) {
+      setNewCandidateError("Candidate name is required.");
+      return;
+    }
+
+    setNewCandidateSaving(true);
+    try {
+      const selectedPosition = data?.positions?.find((p) => p.value === newCandidate.positionId);
+      const res = await fetch("/api/candidates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...newCandidate,
+          name,
+          positionId: newCandidate.positionId || null,
+          positionTitle: selectedPosition?.label ?? null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setNewCandidateError(String(json.error ?? "Failed to create candidate"));
+        return;
+      }
+
+      setNewCandidateOpen(false);
+      setNewCandidate(EMPTY_CANDIDATE_FORM);
+      push({ title: "Candidate added", description: `${name} was added to the pipeline.` });
+      await mutate();
+    } catch (err: unknown) {
+      setNewCandidateError(err instanceof Error ? err.message : "Failed to create candidate");
+    } finally {
+      setNewCandidateSaving(false);
+    }
+  }
+
   return (
     <div>
       <ToastViewport items={toasts} remove={remove} />
@@ -481,6 +566,10 @@ export function CandidatePipeline() {
               ))}
             </div>
           </div>
+          <Button onClick={() => setNewCandidateOpen(true)} className="w-full md:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Candidate
+          </Button>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-6">
@@ -571,6 +660,85 @@ export function CandidatePipeline() {
               Confirm
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newCandidateOpen} onOpenChange={setNewCandidateOpen}>
+        <DialogContent className="max-w-2xl">
+          <form onSubmit={createCandidate}>
+            <DialogHeader>
+              <DialogTitle>Add New Candidate</DialogTitle>
+              <DialogDescription>
+                Enter candidate details and choose their starting hiring stage.
+              </DialogDescription>
+            </DialogHeader>
+
+            {newCandidateError ? (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {newCandidateError}
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Name *</div>
+                <Input value={newCandidate.name} onChange={(e) => setNewCandidate((p) => ({ ...p, name: e.target.value }))} placeholder="Jane Candidate" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Email</div>
+                <Input value={newCandidate.email} onChange={(e) => setNewCandidate((p) => ({ ...p, email: e.target.value }))} placeholder="jane@email.com" type="email" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Phone</div>
+                <Input value={newCandidate.phone} onChange={(e) => setNewCandidate((p) => ({ ...p, phone: e.target.value }))} placeholder="(919) 555-0123" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Role applying for</div>
+                <Select value={newCandidate.positionId} onChange={(e) => setNewCandidate((p) => ({ ...p, positionId: e.target.value }))} options={candidatePositionOptions} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Pipeline stage</div>
+                <Select value={newCandidate.status} onChange={(e) => setNewCandidate((p) => ({ ...p, status: e.target.value }))} options={statusOptions} />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">License type</div>
+                <Input value={newCandidate.licenseType} onChange={(e) => setNewCandidate((p) => ({ ...p, licenseType: e.target.value }))} placeholder="LCSW, LCAS, LCMHC" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">License number</div>
+                <Input value={newCandidate.licenseNumber} onChange={(e) => setNewCandidate((p) => ({ ...p, licenseNumber: e.target.value }))} placeholder="License #" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Experience years</div>
+                <Input value={newCandidate.experienceYears} onChange={(e) => setNewCandidate((p) => ({ ...p, experienceYears: e.target.value }))} placeholder="5" type="number" min="0" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Location</div>
+                <Input value={newCandidate.location} onChange={(e) => setNewCandidate((p) => ({ ...p, location: e.target.value }))} placeholder="Durham, NC" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-zinc-900">Current employer</div>
+                <Input value={newCandidate.currentEmployer} onChange={(e) => setNewCandidate((p) => ({ ...p, currentEmployer: e.target.value }))} placeholder="Current employer" />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <div className="text-sm font-medium text-zinc-900">Source</div>
+                <Input value={newCandidate.source} onChange={(e) => setNewCandidate((p) => ({ ...p, source: e.target.value }))} placeholder="Manual, Indeed, referral..." />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <div className="text-sm font-medium text-zinc-900">Notes</div>
+                <Textarea value={newCandidate.notes} onChange={(e) => setNewCandidate((p) => ({ ...p, notes: e.target.value }))} placeholder="Add any candidate notes..." />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-5">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={newCandidateSaving}>
+                {newCandidateSaving ? "Adding..." : "Add Candidate"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -28,6 +28,18 @@ function normalizeStatus(s: string | null): string | null {
   return t ? t : null;
 }
 
+async function getOrgIdForUser(admin: any, userId: string) {
+  const { data: userRow, error } = await admin
+    .from("users")
+    .select("organization_id")
+    .eq("id", userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !userRow?.organization_id) return null;
+  return userRow.organization_id as string;
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -183,6 +195,140 @@ export async function GET(request: Request) {
       licenses,
       statuses: STATUSES,
     });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const name = asOptionalString(body.name);
+    const email = asOptionalString(body.email);
+    const phone = asOptionalString(body.phone);
+    const positionId = asOptionalString(body.positionId);
+    const positionTitle = asOptionalString(body.positionTitle);
+    const licenseType = asOptionalString(body.licenseType);
+    const licenseNumber = asOptionalString(body.licenseNumber);
+    const experienceYears = asOptionalInt(asOptionalString(body.experienceYears));
+    const location = asOptionalString(body.location);
+    const currentEmployer = asOptionalString(body.currentEmployer);
+    const source = asOptionalString(body.source) ?? "Manual";
+    const notes = asOptionalString(body.notes);
+    const status = normalizeStatus(asOptionalString(body.status)) ?? "new";
+
+    if (!name) {
+      return NextResponse.json({ ok: false, error: "Candidate name is required" }, { status: 400 });
+    }
+
+    if (!STATUSES.includes(status as (typeof STATUSES)[number])) {
+      return NextResponse.json({ ok: false, error: "Invalid candidate status" }, { status: 400 });
+    }
+
+    const sb = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const admin = createSupabaseAdminClient();
+    const orgId = await getOrgIdForUser(admin, user.id);
+    if (!orgId) {
+      return NextResponse.json({ ok: false, error: "Missing organization" }, { status: 500 });
+    }
+
+    const matchedPositions = positionId
+      ? [
+          {
+            position_id: positionId,
+            position_title: positionTitle,
+            match_score: null,
+          },
+        ]
+      : null;
+
+    const insertFull = {
+      organization_id: orgId,
+      name,
+      email,
+      phone,
+      license_type: licenseType,
+      license_number: licenseNumber,
+      experience_years: experienceYears,
+      location,
+      current_employer: currentEmployer,
+      source,
+      status,
+      fit_score: 0,
+      matched_positions: matchedPositions,
+      raw_data: {
+        manual_entry: true,
+        position_id: positionId,
+        position_title: positionTitle,
+        notes,
+      },
+    };
+
+    const insertFallback = {
+      organization_id: orgId,
+      name,
+      email,
+      phone,
+      license_type: licenseType,
+      license_number: licenseNumber,
+      experience_years: experienceYears,
+      location,
+      current_employer: currentEmployer,
+      source,
+      status,
+      fit_score: 0,
+      raw_data: {
+        manual_entry: true,
+        position_id: positionId,
+        position_title: positionTitle,
+        notes,
+      },
+    };
+
+    const fullResp = await admin
+      .from("candidates")
+      .insert(insertFull)
+      .select("id,name,email,phone,license_type,license_number,experience_years,specializations,location,current_employer,source,source_url,status,fit_score,created_at")
+      .maybeSingle();
+
+    let candidate = fullResp.data;
+    let insertError = fullResp.error;
+
+    if (insertError) {
+      const fallbackResp = await admin
+        .from("candidates")
+        .insert(insertFallback)
+        .select("id,name,email,phone,license_type,license_number,experience_years,specializations,location,current_employer,source,source_url,status,fit_score,created_at")
+        .maybeSingle();
+      candidate = fallbackResp.data;
+      insertError = fallbackResp.error;
+    }
+
+    if (insertError || !candidate) {
+      return NextResponse.json({ ok: false, error: insertError?.message ?? "Failed to create candidate" }, { status: 500 });
+    }
+
+    await admin.from("activities").insert([
+      {
+        candidate_id: candidate.id,
+        user_id: user.id,
+        action: "candidate_created",
+        notes: JSON.stringify({ source: "manual", status, position_id: positionId }),
+      },
+    ]);
+
+    return NextResponse.json({ ok: true, candidate });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message ?? "Unknown error" },
