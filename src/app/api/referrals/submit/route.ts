@@ -4,6 +4,37 @@ import { createSupabaseAdminClient } from "@/lib/db/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { ReferralSubmittedEmail, referralSubmittedSubject } from "@/lib/email/templates/referral-submitted";
 
+type ReferralSubmitBody = {
+  organizationSlug?: unknown;
+  name?: unknown;
+  dateOfBirth?: unknown;
+  email?: unknown;
+  phone?: unknown;
+  serviceNeeded?: unknown;
+  urgency?: unknown;
+  location?: unknown;
+  insuranceType?: unknown;
+  medicaidNumber?: unknown;
+  referralAgency?: unknown;
+  referralContactName?: unknown;
+  referralContactEmail?: unknown;
+  notes?: unknown;
+};
+
+type OrganizationRow = {
+  id: string;
+  name: string | null;
+  slug: string | null;
+};
+
+type LeadIdRow = {
+  id: string;
+};
+
+type AdminEmailRow = {
+  email: string | null;
+};
+
 function corsHeaders() {
   const origin = process.env.REFERRAL_FORM_ORIGIN ?? "*";
   return {
@@ -17,6 +48,14 @@ function asOptionalString(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const s = v.trim();
   return s ? s : null;
+}
+
+function asOptionalDate(v: unknown): string | null {
+  const s = asOptionalString(v);
+  if (!s) return null;
+  const date = new Date(s);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
 }
 
 function asOptionalEnum(v: unknown, allowed: string[]): string | null {
@@ -43,10 +82,11 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => null)) as any;
+    const body = (await request.json().catch(() => null)) as ReferralSubmitBody | null;
 
     const organizationSlug = asOptionalString(body?.organizationSlug);
     const name = asOptionalString(body?.name);
+    const date_of_birth = asOptionalDate(body?.dateOfBirth);
     const email = asOptionalString(body?.email);
     const phone = asOptionalString(body?.phone);
     const need_type = asOptionalString(body?.serviceNeeded);
@@ -73,7 +113,7 @@ export async function POST(request: Request) {
       .from("organizations")
       .select("id,name,slug")
       .eq("slug", organizationSlug)
-      .maybeSingle();
+      .maybeSingle<OrganizationRow>();
 
     if (orgError || !org?.id) {
       return NextResponse.json(
@@ -87,6 +127,7 @@ export async function POST(request: Request) {
       .insert({
         organization_id: org.id,
         name,
+        date_of_birth,
         email,
         phone,
         location,
@@ -100,9 +141,9 @@ export async function POST(request: Request) {
         referral_contact_email,
         notes,
         status: "new",
-      } as any)
+      })
       .select("id")
-      .maybeSingle();
+      .maybeSingle<LeadIdRow>();
 
     if (leadError) {
       return NextResponse.json(
@@ -111,16 +152,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const leadId = String((lead as any)?.id ?? "");
+    const leadId = String(lead?.id ?? "");
 
     const { data: admins } = await admin
       .from("users")
       .select("email")
       .eq("organization_id", org.id)
-      .eq("role", "admin");
+      .eq("role", "admin")
+      .returns<AdminEmailRow[]>();
 
     const to = (admins ?? [])
-      .map((a: any) => String(a?.email ?? "").trim())
+      .map((a) => String(a.email ?? "").trim())
       .filter(Boolean);
 
     if (to.length) {
@@ -133,7 +175,7 @@ export async function POST(request: Request) {
               to: addr,
               subject: referralSubmittedSubject(name),
               react: ReferralSubmittedEmail({
-                organizationName: String((org as any)?.name ?? ""),
+                organizationName: String(org.name ?? ""),
                 leadName: name,
                 phone,
                 email,
@@ -163,9 +205,9 @@ export async function POST(request: Request) {
         headers: corsHeaders(),
       }
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Internal server error" },
+      { ok: false, error: e instanceof Error ? e.message : "Internal server error" },
       { status: 500, headers: corsHeaders() }
     );
   }

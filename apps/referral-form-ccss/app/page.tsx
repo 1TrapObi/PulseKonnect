@@ -9,6 +9,7 @@ type Insurance = "" | "medicaid" | "medicare" | "private" | "self_pay" | "slidin
 
 type FormData = {
   name: string;
+  dateOfBirth: string;
   email: string;
   phone: string;
   serviceNeeded: string;
@@ -20,6 +21,10 @@ type FormData = {
   referralContactName: string;
   referralContactEmail: string;
   notes: string;
+};
+
+type SubmitResponse = {
+  error?: string;
 };
 
 export default function Home() {
@@ -40,6 +45,7 @@ export default function Home() {
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
+    dateOfBirth: "",
     email: "",
     phone: "",
     serviceNeeded: "",
@@ -89,7 +95,7 @@ export default function Home() {
         }),
       });
 
-      const data = (await res.json().catch(() => null)) as any;
+      const data = (await res.json().catch(() => null)) as SubmitResponse | null;
       if (!res.ok) {
         setError(String(data?.error ?? "Failed to submit referral"));
         return;
@@ -100,6 +106,7 @@ export default function Home() {
         setIsSuccess(false);
         setFormData({
           name: "",
+          dateOfBirth: "",
           email: "",
           phone: "",
           serviceNeeded: "",
@@ -113,8 +120,8 @@ export default function Home() {
           notes: "",
         });
       }, 3000);
-    } catch (err: any) {
-      setError(err?.message ?? "An error occurred. Please try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -185,6 +192,19 @@ export default function Home() {
                   />
                 </label>
 
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-900">Date of Birth</span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    autoComplete="bday"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-900">Phone Number *</span>
                   <input
