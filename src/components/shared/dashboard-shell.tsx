@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
@@ -8,7 +8,16 @@ import { HelpMenu } from "@/components/navigation/help-menu";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { OnboardingTour } from "@/components/onboarding/tour";
 import { SidebarNav } from "@/components/shared/sidebar-nav";
+import { Badge } from "@/components/ui/badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+type Role = "super_admin" | "admin" | "staff";
+
+function roleBadgeVariant(role: Role) {
+  if (role === "super_admin") return "accent" as const;
+  if (role === "admin") return "info" as const;
+  return "secondary" as const;
+}
 
 export function DashboardShell({
   children,
@@ -17,6 +26,8 @@ export function DashboardShell({
   children: ReactNode;
   title: string;
 }) {
+  const [role, setRole] = useState<Role>("admin");
+  const [roleLabel, setRoleLabel] = useState("Admin");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -36,6 +47,22 @@ export function DashboardShell({
       }
       return next;
     });
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/auth/context", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const nextRole = data?.user?.role;
+        if (!mounted || !["super_admin", "admin", "staff"].includes(nextRole)) return;
+        setRole(nextRole);
+        setRoleLabel(String(data?.user?.roleLabel ?? "Admin"));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
@@ -71,7 +98,7 @@ export function DashboardShell({
             )}
           </div>
 
-            <SidebarNav collapsed={sidebarCollapsed} />
+            <SidebarNav collapsed={sidebarCollapsed} role={role} />
           </aside>
 
           <div className="flex min-h-screen flex-1 flex-col">
@@ -92,6 +119,7 @@ export function DashboardShell({
                 <div className="text-sm font-semibold text-zinc-900">{title}</div>
               </div>
               <div className="flex items-center gap-2">
+                <Badge variant={roleBadgeVariant(role)}>{roleLabel}</Badge>
                 <HelpMenu />
                 <NotificationCenter />
                 <form action={signOut}>

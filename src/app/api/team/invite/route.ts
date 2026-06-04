@@ -3,18 +3,21 @@ import crypto from "crypto";
 import * as React from "react";
 
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
+import { normalizeRole } from "@/lib/auth/rbac";
 import { sendEmail } from "@/lib/email/send";
 import { TeamInvitationEmail, teamInvitationSubject } from "@/lib/email/templates/team-invitation";
 
 async function getOrgIdForUser(admin: any, userId: string) {
   const { data: userRow, error } = await admin
     .from("users")
-    .select("organization_id")
+    .select("organization_id,role")
     .eq("id", userId)
     .limit(1)
     .maybeSingle();
 
   if (error || !userRow?.organization_id) return null;
+  const role = normalizeRole((userRow as { role?: string | null }).role);
+  if (role === "staff") return null;
   return userRow.organization_id as string;
 }
 
@@ -32,7 +35,7 @@ export async function POST(request: Request) {
     if (!email || !email.includes("@")) {
       return NextResponse.json({ success: false, error: "Invalid email" }, { status: 400 });
     }
-    if (!(role === "admin" || role === "staff" || role === "viewer")) {
+    if (!(role === "admin" || role === "staff")) {
       return NextResponse.json({ success: false, error: "Invalid role" }, { status: 400 });
     }
 

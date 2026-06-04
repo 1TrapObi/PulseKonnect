@@ -6,8 +6,11 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, LayoutDashboard, Settings, Users } from "lucide-react";
 
 const secondaryNav = [
+  { href: "/admin/users", label: "User Management", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+
+type Role = "super_admin" | "admin" | "staff";
 
 function NavLink({
   href,
@@ -39,8 +42,9 @@ function NavLink({
   );
 }
 
-export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
+export function SidebarNav({ collapsed = false, role = "admin" }: { collapsed?: boolean; role?: Role }) {
   const pathname = usePathname();
+  const canViewAdminSections = role === "super_admin" || role === "admin";
   const defaultOpen = pathname.startsWith("/leads") || pathname.startsWith("/analytics");
   const [leadsOpen, setLeadsOpen] = React.useState(defaultOpen);
 
@@ -92,12 +96,16 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
             <NavLink href="/leads" collapsed={collapsed}>
               <span data-tour="sidebar-leads">All Leads</span>
             </NavLink>
-            <NavLink href="/analytics/leads" collapsed={collapsed}>
-              Analytics
-            </NavLink>
-            <NavLink href="/leads/configuration" collapsed={collapsed}>
-              Configuration
-            </NavLink>
+            {canViewAdminSections ? (
+              <NavLink href="/analytics/leads" collapsed={collapsed}>
+                Analytics
+              </NavLink>
+            ) : null}
+            {canViewAdminSections ? (
+              <NavLink href="/leads/configuration" collapsed={collapsed}>
+                Configuration
+              </NavLink>
+            ) : null}
           </div>
         </div>
       </div>
@@ -135,26 +143,32 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
             <NavLink href="/candidates" collapsed={collapsed}>
               Candidate Pipeline
             </NavLink>
-            <NavLink href="/settings/positions" collapsed={collapsed}>
-              Job Postings
-            </NavLink>
-            <NavLink href="/analytics/recruitment" collapsed={collapsed}>
-              Recruitment Metrics
-            </NavLink>
+            {canViewAdminSections ? (
+              <NavLink href="/settings/positions" collapsed={collapsed}>
+                Job Postings
+              </NavLink>
+            ) : null}
+            {canViewAdminSections ? (
+              <NavLink href="/analytics/recruitment" collapsed={collapsed}>
+                Recruitment Metrics
+              </NavLink>
+            ) : null}
           </div>
         </div>
       </div>
 
-      {secondaryNav.map((item) => (
-        <NavLink
-          key={item.href}
-          href={item.href}
-          icon={item.icon}
-          collapsed={collapsed}
-        >
-          {item.label}
-        </NavLink>
-      ))}
+      {canViewAdminSections
+        ? secondaryNav.map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              icon={item.icon}
+              collapsed={collapsed}
+            >
+              {item.label}
+            </NavLink>
+          ))
+        : null}
     </nav>
   );
 }

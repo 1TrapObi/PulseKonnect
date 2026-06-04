@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
+import { normalizeRole } from "@/lib/auth/rbac";
 
 async function getOrgIdForUser(admin: any, userId: string) {
   const { data: userRow, error } = await admin
     .from("users")
-    .select("organization_id")
+    .select("organization_id,role")
     .eq("id", userId)
     .limit(1)
     .maybeSingle();
 
   if (error || !userRow?.organization_id) return null;
+  const role = normalizeRole((userRow as { role?: string | null }).role);
+  if (role === "staff") return null;
   return userRow.organization_id as string;
 }
 

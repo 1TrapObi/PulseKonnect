@@ -7,8 +7,31 @@ type CookieToSet = {
   options?: Parameters<NextResponse["cookies"]["set"]>[2];
 };
 
+type Role = "super_admin" | "admin" | "staff";
+
+const routeRoles: Array<{ prefix: string; roles: Role[] }> = [
+  { prefix: "/admin/billing", roles: ["super_admin"] },
+  { prefix: "/admin/settings", roles: ["super_admin", "admin"] },
+  { prefix: "/admin/users", roles: ["super_admin", "admin"] },
+  { prefix: "/admin/analytics", roles: ["super_admin", "admin"] },
+  { prefix: "/admin/leads", roles: ["super_admin", "admin", "staff"] },
+  { prefix: "/settings", roles: ["super_admin", "admin"] },
+  { prefix: "/analytics", roles: ["super_admin", "admin"] },
+  { prefix: "/leads/configuration", roles: ["super_admin", "admin"] },
+];
+
+function normalizeRole(role: string | null | undefined): Role {
+  if (role === "super_admin" || role === "admin" || role === "staff") return role;
+  return "admin";
+}
+
+function allowedRolesForPath(pathname: string): Role[] | null {
+  const match = routeRoles.find((route) => pathname === route.prefix || pathname.startsWith(route.prefix + "/"));
+  return match?.roles ?? null;
+}
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -39,6 +62,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/candidates") ||
     request.nextUrl.pathname.startsWith("/analytics") ||
     request.nextUrl.pathname.startsWith("/settings") ||
+    request.nextUrl.pathname.startsWith("/admin") ||
     request.nextUrl.pathname.startsWith("/onboarding") ||
     request.nextUrl.pathname === "/dashboard";
 
@@ -54,6 +78,36 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/verify-email";
     url.searchParams.set("email", user.email ?? "");
     return NextResponse.redirect(url);
+  }
+
+  const requiredRoles = allowedRolesForPath(request.nextUrl.pathname);
+  if (inDashboardGroup && user && requiredRoles) {
+    const admin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {
+            // noop
+          },
+        },
+      }
+    );
+    const { data: userRow } = await admin
+      .from("users")
+      .select("role,status")
+      .eq("id", user.id)
+      .maybeSingle<{ role: string | null; status: string | null }>();
+    const role = normalizeRole(userRow?.role);
+    if (userRow?.status === "deactivated" || !requiredRoles.includes(role)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/unauthorized";
+      url.searchParams.set("from", request.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
   }
 
   if ((request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup") && user) {
@@ -73,6 +127,8 @@ export const config = {
     "/candidates/:path*",
     "/analytics/:path*",
     "/settings/:path*",
+    "/admin/:path*",
+    "/unauthorized",
     "/onboarding/:path*",
     "/login",
     "/signup",

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
+import { canDelete, normalizeRole } from "@/lib/auth/rbac";
 
-type UserOrgRow = { organization_id: string | null };
+type UserOrgRow = { organization_id: string | null; role: string | null };
 
 type BulkDeleteBody = {
   ids?: string[];
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
 
     const { data: userRow, error: userErr } = await admin
       .from("users")
-      .select("organization_id")
+      .select("organization_id,role")
       .eq("id", user.id)
       .limit(1)
       .maybeSingle<UserOrgRow>();
@@ -52,13 +53,23 @@ export async function POST(request: Request) {
     }
 
     const orgId = userRow.organization_id;
+    const role = normalizeRole(userRow.role);
 
-    const { data, error } = await admin
+    if (!canDelete({ userId: user.id, email: user.email ?? null, role, organizationId: orgId, isSuperAdmin: role === "super_admin" })) {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    let deleteQuery = admin
       .from("leads")
       .delete()
-      .eq("organization_id", orgId)
       .in("id", ids)
       .select("id");
+
+    if (role !== "super_admin") {
+      deleteQuery = deleteQuery.eq("organization_id", orgId);
+    }
+
+    const { data, error } = await deleteQuery;
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/db/supabase/server";
+import { normalizeRole } from "@/lib/auth/rbac";
 
 const PAGE_SIZE = 25;
 
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
 
     const { data: userRow, error: userErr } = await admin
       .from("users")
-      .select("organization_id")
+      .select("organization_id,role")
       .eq("id", user.id)
       .limit(1)
       .maybeSingle();
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
     }
 
     const orgId = userRow.organization_id as string;
+    const role = normalizeRole((userRow as { role?: string | null }).role);
 
     let query = admin
       .from("leads")
@@ -67,8 +69,27 @@ export async function GET(request: Request) {
         "id,name,email,phone,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,quality_score,priority,ai_reasoning,created_at",
         { count: "exact" }
       )
-      .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
+
+    if (role !== "super_admin") query = query.eq("organization_id", orgId);
+    if (role === "staff") {
+      const { data: assigned } = await admin
+        .from("assigned_leads")
+        .select("lead_id")
+        .eq("user_id", user.id);
+      const assignedIds = (assigned ?? []).map((row: { lead_id: string | null }) => row.lead_id).filter(Boolean) as string[];
+      if (!assignedIds.length) {
+        return NextResponse.json({
+          ok: true,
+          leads: [],
+          total: 0,
+          page,
+          totalPages: 1,
+          sources: [],
+        });
+      }
+      query = query.in("id", assignedIds);
+    }
 
     if (status && status !== "all") query = query.eq("status", status);
     if (urgency && urgency !== "all") query = query.eq("urgency", urgency);
@@ -147,7 +168,7 @@ export async function POST(request: Request) {
     const admin = createSupabaseAdminClient();
     const { data: userRow, error: userErr } = await admin
       .from("users")
-      .select("organization_id")
+      .select("organization_id,role")
       .eq("id", user.id)
       .limit(1)
       .maybeSingle();
@@ -160,6 +181,11 @@ export async function POST(request: Request) {
     }
 
     const orgId = userRow.organization_id as string;
+    const role = normalizeRole((userRow as { role?: string | null }).role);
+
+    if (role === "staff") {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
 
     const { data, error } = await admin
       .from("leads")
