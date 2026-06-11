@@ -134,42 +134,184 @@ const FIELD_DEFINITIONS: Array<{ key: LeadFieldKey; label: string }> = [
 ];
 
 const CAROLINA_HEADER_MAP: Record<string, LeadFieldKey> = {
+  // Client IDs
   clientid: "external_client_id",
+  client_id: "external_client_id",
+  client: "external_client_id",
+  id: "external_client_id",
   recordid: "external_record_id",
+  record_id: "external_record_id",
+  // Name fields
   firstname: "first_name",
+  first_name: "first_name",
+  fname: "first_name",
   lastname: "last_name",
+  last_name: "last_name",
+  lname: "last_name",
   fullname: "name",
+  full_name: "name",
+  name: "name",
+  // Date of birth
   dob: "date_of_birth",
+  dateofbirth: "date_of_birth",
+  birthdate: "date_of_birth",
+  birth_date: "date_of_birth",
+  // Demographics
   gender: "gender",
+  sex: "gender",
   race: "race",
+  ethnicity: "race",
   language: "language",
+  primarylanguage: "language",
+  // Phone fields - multiple common variations
   phonehome: "phone_home",
+  phone_home: "phone_home",
+  homephone: "phone_home",
+  home_phone: "phone_home",
+  hphone: "phone_home",
   phonecell: "phone",
+  phone_cell: "phone",
+  cellphone: "phone",
+  cell_phone: "phone",
+  mobilephone: "phone",
+  mobile_phone: "phone",
+  phone: "phone",
+  phonenumber: "phone",
+  phone_number: "phone",
+  contactphone: "phone",
+  contact_phone: "phone",
+  // Email
   emailaddress: "email",
+  email_address: "email",
+  email: "email",
+  // Address fields
   address: "address_line1",
+  addressline1: "address_line1",
+  address_line1: "address_line1",
+  address1: "address_line1",
+  streetaddress: "address_line1",
+  street_address: "address_line1",
+  street: "address_line1",
+  line1: "address_line1",
+  // Spreadsheet-specific: "Address - Address", "Address - City", etc.
+  addressaddress: "address_line1",
+  addresscity: "city",
+  addressstate: "state",
+  addresszip: "zip",
+  addresszipcode: "zip",
   city: "city",
   state: "state",
+  st: "state",
   zipcode: "zip",
+  zip_code: "zip",
+  zip: "zip",
+  postalcode: "zip",
+  postal_code: "zip",
+  // Insurance fields
   insurancetype: "insurance_type",
+  insurance_type: "insurance_type",
+  insurance: "insurance_type",
+  coverage: "insurance_type",
+  plantype: "insurance_type",
+  plan_type: "insurance_type",
   insurancepayer: "insurance_payer",
+  insurance_payer: "insurance_payer",
+  payer: "insurance_payer",
+  insurancecompany: "insurance_payer",
+  insurance_company: "insurance_payer",
+  insuranceplan: "insurance_payer",
+  insurance_plan: "insurance_payer",
+  medicaidprovider: "insurance_payer",
+  medicaid_provider: "insurance_payer",
+  medicareprovider: "insurance_payer",
+  medicare_provider: "insurance_payer",
   insuranceid: "insurance_id",
+  insurance_id: "insurance_id",
+  insuranceidnumber: "insurance_id",
+  insurance_id_number: "insurance_id",
+  memberid: "insurance_id",
+  member_id: "insurance_id",
+  policyid: "insurance_id",
+  policy_id: "insurance_id",
+  groupid: "insurance_id",
+  group_id: "insurance_id",
+  groupnumber: "insurance_id",
+  group_number: "insurance_id",
+  medicaidnumber: "insurance_id",
+  medicaid_number: "insurance_id",
+  medicaidnum: "insurance_id",
+  medicaid_id: "insurance_id",
+  medicarenumber: "insurance_id",
+  medicare_number: "insurance_id",
+  policynumber: "insurance_id",
+  policy_number: "insurance_id",
+  idnumber: "insurance_id",
+  id_number: "insurance_id",
   secondaryinsurancetype: "secondary_insurance_type",
+  secondary_insurance_type: "secondary_insurance_type",
   secondaryinsurancepayer: "secondary_insurance_payer",
+  secondary_insurance_payer: "secondary_insurance_payer",
   mco: "mco",
+  mconame: "mco",
+  mco_name: "mco",
+  // Status fields
   active: "active",
+  status: "active",
+  isactive: "active",
+  is_active: "active",
   activateddate: "activated_date",
+  activated_date: "activated_date",
+  // Staff/Provider fields
   assignedstaffname: "assigned_staff_name",
+  assigned_staff_name: "assigned_staff_name",
+  assignedstaff: "assigned_staff_name",
+  assigned_staff: "assigned_staff_name",
+  staffname: "assigned_staff_name",
+  staff_name: "assigned_staff_name",
   therapistname: "therapist_name",
+  therapist_name: "therapist_name",
+  therapist: "therapist_name",
+  providername: "therapist_name",
+  provider_name: "therapist_name",
+  provider: "therapist_name",
+  // Referral fields
   referralsource: "referral_source",
+  referral_source: "referral_source",
+  referralsrc: "referral_source",
+  referral: "referral_source",
+  referredby: "referral_source",
+  referred_by: "referral_source",
   referraltype: "referral_type",
+  referral_type: "referral_type",
+  // Location
   office: "office",
+  location: "office",
+  site: "office",
+  clinic: "office",
+  // Diagnosis
   diagnosis1: "diagnosis_1",
+  diagnosis_1: "diagnosis_1",
+  dx1: "diagnosis_1",
+  primarydiagnosis: "diagnosis_1",
+  primary_diagnosis: "diagnosis_1",
   diagnosis2: "diagnosis_2",
+  diagnosis_2: "diagnosis_2",
+  dx2: "diagnosis_2",
   diagnosis3: "diagnosis_3",
+  diagnosis_3: "diagnosis_3",
+  dx3: "diagnosis_3",
   diagnosis4: "diagnosis_4",
+  diagnosis_4: "diagnosis_4",
+  dx4: "diagnosis_4",
   diagnosis5: "diagnosis_5",
+  diagnosis_5: "diagnosis_5",
+  dx5: "diagnosis_5",
   diagnosis6: "diagnosis_6",
+  diagnosis_6: "diagnosis_6",
+  dx6: "diagnosis_6",
   diagnosis7: "diagnosis_7",
+  diagnosis_7: "diagnosis_7",
+  dx7: "diagnosis_7",
 };
 
 function normalizeHeader(value: string) {
@@ -178,6 +320,9 @@ function normalizeHeader(value: string) {
 
 function toCellString(value: unknown): string {
   if (value == null) return "";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "string") return value.trim();
   return String(value).trim();
 }
 
@@ -520,13 +665,15 @@ export function ImportLeadsModal({ open, onOpenChange, onImported }: ImportLeads
               <div className="space-y-2">
                 <div className="text-sm font-medium text-zinc-900">Preview (first 10 rows)</div>
                 <div className="overflow-x-auto rounded-md border">
-                  <table className="w-full min-w-[640px] text-sm">
+                  <table className="w-full min-w-[800px] text-sm">
                     <thead className="bg-zinc-50 text-zinc-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Name</th>
-                        <th className="px-3 py-2 text-left font-medium">Email</th>
-                        <th className="px-3 py-2 text-left font-medium">Phone</th>
-                        <th className="px-3 py-2 text-left font-medium">Client ID</th>
+                        <th className="px-3 py-2 text-left font-medium">Phone Number</th>
+                        <th className="px-3 py-2 text-left font-medium">DOB</th>
+                        <th className="px-3 py-2 text-left font-medium">Medicaid #</th>
+                        <th className="px-3 py-2 text-left font-medium">Insurance</th>
+                        <th className="px-3 py-2 text-left font-medium">Address</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -535,12 +682,35 @@ export function ImportLeadsModal({ open, onOpenChange, onImported }: ImportLeads
                         const last = String(lead.last_name ?? "").trim();
                         const explicitName = String(lead.name ?? "").trim();
                         const computedName = explicitName || `${first} ${last}`.trim() || "—";
+
+                        const phoneNumber = String(lead.phone ?? lead.phone_home ?? "").trim() || "—";
+
+                        const dobDisplay =
+                          lead.date_of_birth && typeof lead.date_of_birth === "string"
+                            ? new Date(lead.date_of_birth).toLocaleDateString()
+                            : "—";
+
+                        const medicaidNum = String(lead.insurance_id ?? "").trim() || "—";
+
+                        const insuranceType = String(lead.insurance_type ?? "").trim() || "—";
+
+                        const address = [
+                          String(lead.address_line1 ?? "").trim(),
+                          lead.city ? `, ${String(lead.city).trim()}` : "",
+                          lead.state ? `, ${String(lead.state).trim()}` : "",
+                          lead.zip ? ` ${String(lead.zip).trim()}` : "",
+                        ]
+                          .join("")
+                          .trim() || "—";
+
                         return (
                           <tr key={index} className="border-t">
                             <td className="px-3 py-2">{computedName}</td>
-                            <td className="px-3 py-2">{String(lead.email ?? "—")}</td>
-                            <td className="px-3 py-2">{String(lead.phone ?? "—")}</td>
-                            <td className="px-3 py-2">{String(lead.external_client_id ?? "—")}</td>
+                            <td className="px-3 py-2">{phoneNumber}</td>
+                            <td className="px-3 py-2">{dobDisplay}</td>
+                            <td className="px-3 py-2">{medicaidNum}</td>
+                            <td className="px-3 py-2">{insuranceType}</td>
+                            <td className="px-3 py-2">{address}</td>
                           </tr>
                         );
                       })}

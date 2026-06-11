@@ -150,6 +150,7 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => null)) as BulkImportRequest | null;
     const leads = Array.isArray(body?.leads) ? body.leads : [];
+
     const skipDuplicates = body?.skipDuplicates !== false;
     const previewOnly = body?.previewOnly === true;
 
@@ -335,7 +336,7 @@ export async function POST(request: Request) {
 
       const scoreResult = await scoreLead(scoringInput, historicalPattern);
 
-      rowsToInsert.push({
+      const rowData = {
         organization_id: organizationId,
         name: leadName,
         first_name: firstName,
@@ -388,7 +389,9 @@ export async function POST(request: Request) {
           import_source: "bulk_upload",
           imported_by: user.id,
         },
-      });
+      };
+
+      rowsToInsert.push(rowData);
     }
 
     if (previewOnly) {

@@ -37,7 +37,7 @@ export async function GET(
     const { data: lead, error } = await admin
       .from("leads")
       .select(
-        "id,name,email,phone,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,created_at,assigned_to,contacted_at,response_time_hours,lost_reason"
+        "id,name,first_name,last_name,email,phone,phone_home,date_of_birth,address_line1,city,state,zip,insurance_type,insurance_payer,insurance_id,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,created_at,assigned_to,contacted_at,response_time_hours,lost_reason"
       )
       .eq("id", id)
       .eq("organization_id", orgId)

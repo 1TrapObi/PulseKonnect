@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Grid3X3, List, Plus, Search } from "lucide-react";
+import { ChevronDown, Grid3X3, List, Plus, Search, Upload, CheckSquare } from "lucide-react";
 
 import { HelpTip } from "@/components/ui/help-tip";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,8 +38,12 @@ import { ImportLeadsModal } from "./import-leads-modal";
 type Lead = {
   id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
+  phone_home: string | null;
+  date_of_birth: string | null;
   need_type: string | null;
   location: string | null;
   source: string | null;
@@ -44,6 +55,13 @@ type Lead = {
   quality_score?: number | null;
   priority?: string | null;
   ai_reasoning?: string | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  insurance_type: string | null;
+  insurance_payer: string | null;
+  insurance_id: string | null;
   created_at: string;
 };
 
@@ -174,12 +192,13 @@ function useDebounced<T>(value: T, delayMs: number) {
 
 export function LeadsDashboard() {
   const router = useRouter();
-  const [view, setView] = React.useState<"grid" | "list">("grid");
+  const [view, setView] = React.useState<"grid" | "list">("list");
 
   const [newLeadOpen, setNewLeadOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
   const [selectMode, setSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
+  const [selectingAll, setSelectingAll] = React.useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
@@ -495,6 +514,47 @@ export function LeadsDashboard() {
     });
   }
 
+  async function selectAllMatching() {
+    const params = new URLSearchParams();
+    params.set("status", status);
+    params.set("urgency", urgency);
+    params.set("source", source);
+    params.set("idsOnly", "1");
+    if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+    if (dateRange.startDate) params.set("startDate", dateRange.startDate);
+    if (dateRange.endDate) params.set("endDate", dateRange.endDate);
+
+    setSelectingAll(true);
+    try {
+      const res = await fetch(`/api/leads?${params.toString()}`);
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; ids?: string[]; total?: number; error?: string } | null;
+
+      if (!res.ok || !json?.ok) {
+        push({
+          title: "Selection failed",
+          description: json?.error ?? `Failed to select leads (${res.status})`,
+          variant: "danger",
+        });
+        return;
+      }
+
+      const ids = json.ids ?? [];
+      setSelectedIds(new Set(ids));
+      push({
+        title: "Leads selected",
+        description: `Selected ${ids.length} lead${ids.length === 1 ? "" : "s"} matching the current filters.`,
+      });
+    } catch (e: unknown) {
+      push({
+        title: "Selection failed",
+        description: messageFromError(e),
+        variant: "danger",
+      });
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
   async function bulkDeleteSelected() {
     if (!selectedIds.size) return;
     setBulkDeleting(true);
@@ -760,47 +820,41 @@ export function LeadsDashboard() {
             </div>
           </div>
           <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setSelectMode((prev) => {
-                  const next = !prev;
-                  if (!next) clearSelection();
-                  return next;
-                });
-              }}
-              className="hidden md:inline-flex"
-            >
-              {selectMode ? "Done" : "Select"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setImportOpen(true)}
-              className="hidden md:inline-flex"
-            >
-              Import Leads
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setNewLeadOpen(true)}
-              size="icon"
-              className="md:hidden"
-              style={{ backgroundColor: "#40E0D0", color: "#062925" }}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setNewLeadOpen(true)}
-              className="hidden md:inline-flex"
-              style={{ backgroundColor: "#40E0D0", color: "#062925" }}
-              data-tour="new-lead-button"
-            >
-              <span className="mr-2">+</span>
-              <span>New Lead</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  style={{ backgroundColor: "#40E0D0", color: "#062925" }}
+                  data-tour="new-lead-button"
+                >
+                  <span>Actions</span>
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setNewLeadOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Lead
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImportOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import Leads
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectMode((prev) => {
+                      const next = !prev;
+                      if (!next) clearSelection();
+                      return next;
+                    });
+                  }}
+                >
+                  <CheckSquare className="mr-2 h-4 w-4" />
+                  {selectMode ? "Done Selecting" : "Select Leads"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <HelpTip text="Click here to manually add a new lead." />
             <Button
               variant={view === "grid" ? "secondary" : "outline"}
@@ -851,6 +905,15 @@ export function LeadsDashboard() {
               disabled={!leads.length}
             >
               {allOnPageSelected ? "Clear page" : "Select page"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={selectAllMatching}
+              disabled={selectingAll || !(data?.total ?? 0)}
+            >
+              {selectingAll ? "Selecting…" : `Select all ${data?.total ?? 0}`}
             </Button>
             <Button
               type="button"
@@ -975,9 +1038,7 @@ export function LeadsDashboard() {
                       <HelpTip text="High priority leads should be contacted first." />
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="px-2.5 py-0.5 text-[12px]">
-                            Score {displayScore}
-                          </Badge>
+                          <span />  
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8} className="max-w-xs bg-zinc-900 text-zinc-50">
                           <p>{lead.ai_reasoning ?? "AI-calculated quality score (0-100). Higher means a better match."}</p>
@@ -993,19 +1054,35 @@ export function LeadsDashboard() {
               </CardHeader>
               <CardContent className="space-y-2.5 pt-0">
                 <div className="text-sm leading-6 text-zinc-900">
-                  <span className="font-medium">Need:</span> {lead.need_type ?? "—"}
+                  <span className="font-medium">Name:</span>{" "}
+                  {lead.first_name || lead.last_name
+                    ? `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
+                    : lead.name}
                 </div>
                 <div className="text-sm leading-6 text-zinc-700">
-                  <span className="font-medium">Area:</span> {lead.location ?? "—"}
+                  <span className="font-medium">Phone:</span>{" "}
+                  {lead.phone_home || lead.phone
+                    ? [lead.phone_home, lead.phone].filter(Boolean).join(" / ")
+                    : "—"}
                 </div>
-                <div className="text-sm leading-5 text-zinc-600">
-                  Source: {lead.source ?? "—"}
+                <div className="text-sm leading-6 text-zinc-700">
+                  <span className="font-medium">DOB:</span>{" "}
+                  {lead.date_of_birth ? new Date(lead.date_of_birth).toLocaleDateString() : "—"}
                 </div>
-                {lead.priority ? (
-                  <div className="text-sm leading-5 text-zinc-600">
-                    Priority: {lead.priority}
-                  </div>
-                ) : null}
+                <div className="text-sm leading-6 text-zinc-700">
+                  <span className="font-medium">Medicaid #:</span>{" "}
+                  {lead.insurance_id ?? "—"}
+                </div>
+                <div className="text-sm leading-6 text-zinc-700">
+                  <span className="font-medium">Insurance:</span>{" "}
+                  {lead.insurance_type ?? "—"}
+                </div>
+                <div className="text-sm leading-6 text-zinc-700">
+                  <span className="font-medium">Address:</span>{" "}
+                  {lead.address_line1 || lead.city || lead.state || lead.zip
+                    ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
+                    : "—"}
+                </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button asChild variant="outline" size="sm" className="h-9 px-3 text-sm">

@@ -28,8 +28,12 @@ import { markChecklistProgress } from "@/lib/onboarding/local-progress";
 type Lead = {
   id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
+  phone_home: string | null;
+  date_of_birth: string | null;
   need_type: string | null;
   location: string | null;
   source: string | null;
@@ -38,6 +42,13 @@ type Lead = {
   urgency: string | null;
   qualification_status?: string | null;
   qualification_score?: number | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  insurance_type: string | null;
+  insurance_payer: string | null;
+  insurance_id: string | null;
   created_at: string;
   assigned_to?: string | null;
   contacted_at?: string | null;
@@ -430,32 +441,42 @@ export function LeadDetails({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Lead Info</CardTitle>
+                <CardTitle>Lead Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div>
-                  <span className="font-medium">Need Type:</span> {lead.need_type ?? "—"}
+                  <span className="font-medium">First Name:</span>{" "}
+                  {lead.first_name ?? "—"}
                 </div>
                 <div>
-                  <span className="font-medium">Location:</span> {lead.location ?? "—"}
+                  <span className="font-medium">Last Name:</span>{" "}
+                  {lead.last_name ?? "—"}
                 </div>
                 <div>
-                  <span className="font-medium">Source:</span> {lead.source ?? "—"}
+                  <span className="font-medium">Mobile Number:</span>{" "}
+                  {lead.phone ?? "—"}
                 </div>
                 <div>
-                  <span className="font-medium">Source URL:</span>{" "}
-                  {lead.source_url ? (
-                    <a
-                      className="text-zinc-900 underline"
-                      href={lead.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open
-                    </a>
-                  ) : (
-                    "—"
-                  )}
+                  <span className="font-medium">DOB:</span>{" "}
+                  {lead.date_of_birth ? new Date(lead.date_of_birth).toLocaleDateString() : "—"}
+                </div>
+                <div>
+                  <span className="font-medium">Medicaid Number:</span>{" "}
+                  {lead.insurance_id ?? "—"}
+                </div>
+                <div>
+                  <span className="font-medium">Medicaid Provider:</span>{" "}
+                  {lead.insurance_payer ?? "—"}
+                </div>
+                <div>
+                  <span className="font-medium">Insurance Type:</span>{" "}
+                  {lead.insurance_type ?? "—"}
+                </div>
+                <div>
+                  <span className="font-medium">Address:</span>{" "}
+                  {lead.address_line1 || lead.city || lead.state || lead.zip
+                    ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
+                    : "—"}
                 </div>
               </CardContent>
             </Card>

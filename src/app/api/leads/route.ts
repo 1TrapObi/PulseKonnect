@@ -34,6 +34,7 @@ export async function GET(request: Request) {
     const startDate = parseDate(url.searchParams.get("startDate"));
     const endDate = parseDate(url.searchParams.get("endDate"));
     const page = Math.max(1, Number(url.searchParams.get("page") ?? "1") || 1);
+    const idsOnly = url.searchParams.get("idsOnly") === "1";
 
     const sb = await createSupabaseServerClient();
     const {
@@ -66,7 +67,9 @@ export async function GET(request: Request) {
     let query = admin
       .from("leads")
       .select(
-        "id,name,email,phone,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,quality_score,priority,ai_reasoning,created_at",
+        idsOnly
+          ? "id"
+          : "id,name,first_name,last_name,email,phone,phone_home,date_of_birth,address_line1,city,state,zip,insurance_type,insurance_payer,insurance_id,need_type,location,source,source_url,status,urgency,qualification_status,qualification_score,quality_score,priority,ai_reasoning,created_at",
         { count: "exact" }
       )
       .order("created_at", { ascending: false });
@@ -82,6 +85,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
           ok: true,
           leads: [],
+          ids: [],
           total: 0,
           page,
           totalPages: 1,
@@ -100,6 +104,20 @@ export async function GET(request: Request) {
     if (search && search.trim()) {
       const q = search.trim();
       query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    }
+
+    if (idsOnly) {
+      const { data, error, count } = await query.range(0, 9999);
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        ids: ((data ?? []) as unknown as Array<{ id: string }>).map((lead) => lead.id),
+        total: count ?? 0,
+      });
     }
 
     const from = (page - 1) * PAGE_SIZE;
