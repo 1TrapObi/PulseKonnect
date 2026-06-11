@@ -1072,10 +1072,6 @@ export function LeadsDashboard() {
                   {lead.insurance_id ?? "—"}
                 </div>
                 <div className="text-sm leading-6 text-zinc-700">
-                  <span className="font-medium">Insurance:</span>{" "}
-                  {lead.insurance_type ?? "—"}
-                </div>
-                <div className="text-sm leading-6 text-zinc-700">
                   <span className="font-medium">Address:</span>{" "}
                   {lead.address_line1 || lead.city || lead.state || lead.zip
                     ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
