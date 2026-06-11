@@ -469,10 +469,6 @@ export function LeadDetails({
                   {lead.insurance_payer ?? "—"}
                 </div>
                 <div>
-                  <span className="font-medium">Insurance Type:</span>{" "}
-                  {lead.insurance_type ?? "—"}
-                </div>
-                <div>
                   <span className="font-medium">Address:</span>{" "}
                   {lead.address_line1 || lead.city || lead.state || lead.zip
                     ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
