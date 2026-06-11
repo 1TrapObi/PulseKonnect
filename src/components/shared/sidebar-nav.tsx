@@ -101,11 +101,6 @@ export function SidebarNav({ collapsed = false, role = "admin" }: { collapsed?: 
                 Analytics
               </NavLink>
             ) : null}
-            {canViewAdminSections ? (
-              <NavLink href="/leads/configuration" collapsed={collapsed}>
-                Configuration
-              </NavLink>
-            ) : null}
           </div>
         </div>
       </div>
