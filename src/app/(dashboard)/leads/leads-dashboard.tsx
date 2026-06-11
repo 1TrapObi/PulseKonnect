@@ -100,14 +100,14 @@ type CreateLeadBody = {
 
 type ApiErrorResponse = { ok?: boolean; error?: string };
 type UrgencyValue = "low" | "medium" | "high";
-type RangePreset = "7d" | "30d" | "month" | "custom";
+type RangePreset = "new" | "7d" | "30d" | "custom";
 
 function isUrgencyValue(value: string): value is UrgencyValue {
   return value === "low" || value === "medium" || value === "high";
 }
 
 function isRangePreset(value: string): value is RangePreset {
-  return value === "7d" || value === "30d" || value === "month" || value === "custom";
+  return value === "new" || value === "7d" || value === "30d" || value === "custom";
 }
 
 function messageFromError(error: unknown) {
@@ -217,7 +217,7 @@ export function LeadsDashboard() {
   const [urgency, setUrgency] = React.useState("all");
   const [source, setSource] = React.useState("all");
 
-  const [rangePreset, setRangePreset] = React.useState<RangePreset>("7d");
+  const [rangePreset, setRangePreset] = React.useState<RangePreset>("new");
   const [customStart, setCustomStart] = React.useState("");
   const [customEnd, setCustomEnd] = React.useState("");
 
@@ -240,14 +240,12 @@ export function LeadsDashboard() {
       return { startDate: customStart || null, endDate: customEnd || null };
     }
 
-    const now = new Date();
-    const endDate = now.toISOString();
-
-    if (rangePreset === "month") {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { startDate: start.toISOString(), endDate };
+    if (rangePreset === "new") {
+      return { startDate: null, endDate: null };
     }
 
+    const now = new Date();
+    const endDate = now.toISOString();
     const days = rangePreset === "7d" ? 7 : 30;
     const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     return { startDate: start.toISOString(), endDate };
@@ -348,9 +346,9 @@ export function LeadsDashboard() {
   ];
 
   const rangeOptions: SelectOption[] = [
+    { value: "new", label: "New" },
     { value: "7d", label: "Last 7 days" },
     { value: "30d", label: "Last 30 days" },
-    { value: "month", label: "This month" },
     { value: "custom", label: "Custom" },
   ];
 
@@ -800,7 +798,7 @@ export function LeadsDashboard() {
           <div className="md:col-span-2">
             <Select
               value={rangePreset}
-              onChange={(e) => setRangePreset(isRangePreset(e.target.value) ? e.target.value : "7d")}
+              onChange={(e) => setRangePreset(isRangePreset(e.target.value) ? e.target.value : "new")}
               options={rangeOptions}
             />
           </div>
