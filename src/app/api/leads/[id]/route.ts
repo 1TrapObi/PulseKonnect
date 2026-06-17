@@ -98,6 +98,18 @@ export async function PATCH(
     const patch: Record<string, any> = {};
     if (typeof body.status === "string" && body.status) patch.status = body.status;
 
+    // Lead detail fields for editing
+    if (typeof body.first_name === "string") patch.first_name = body.first_name || null;
+    if (typeof body.last_name === "string") patch.last_name = body.last_name || null;
+    if (typeof body.phone === "string") patch.phone = body.phone || null;
+    if (typeof body.date_of_birth === "string") patch.date_of_birth = body.date_of_birth || null;
+    if (typeof body.insurance_id === "string") patch.insurance_id = body.insurance_id || null;
+    if (typeof body.insurance_payer === "string") patch.insurance_payer = body.insurance_payer || null;
+    if (typeof body.address_line1 === "string") patch.address_line1 = body.address_line1 || null;
+    if (typeof body.city === "string") patch.city = body.city || null;
+    if (typeof body.state === "string") patch.state = body.state || null;
+    if (typeof body.zip === "string") patch.zip = body.zip || null;
+
     if (Object.keys(patch).length) {
       const { error } = await admin
         .from("leads")

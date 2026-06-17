@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Info } from "lucide-react";
+import { Info, Pencil } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -219,6 +219,36 @@ export function LeadDetails({
 
   const [pendingStatus, setPendingStatus] = React.useState<string | null>(null);
 
+  // Edit mode state
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editForm, setEditForm] = React.useState({
+    first_name: lead.first_name ?? "",
+    last_name: lead.last_name ?? "",
+    phone: lead.phone ?? "",
+    date_of_birth: lead.date_of_birth ?? "",
+    insurance_id: lead.insurance_id ?? "",
+    insurance_payer: lead.insurance_payer ?? "",
+    address_line1: lead.address_line1 ?? "",
+    city: lead.city ?? "",
+    state: lead.state ?? "",
+    zip: lead.zip ?? "",
+  });
+
+  React.useEffect(() => {
+    setEditForm({
+      first_name: lead.first_name ?? "",
+      last_name: lead.last_name ?? "",
+      phone: lead.phone ?? "",
+      date_of_birth: lead.date_of_birth ?? "",
+      insurance_id: lead.insurance_id ?? "",
+      insurance_payer: lead.insurance_payer ?? "",
+      address_line1: lead.address_line1 ?? "",
+      city: lead.city ?? "",
+      state: lead.state ?? "",
+      zip: lead.zip ?? "",
+    });
+  }, [lead]);
+
   const teamOptions: SelectOption[] = team.map((u) => ({ value: u.id, label: u.email }));
 
   async function refreshLead() {
@@ -302,6 +332,44 @@ export function LeadDetails({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveLeadDetails() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+
+      const json = await res.json();
+      if (!json.ok) {
+        alert(json.error ?? "Failed to save lead details");
+        return;
+      }
+
+      await refreshLead();
+      setIsEditing(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function cancelEdit() {
+    setEditForm({
+      first_name: lead.first_name ?? "",
+      last_name: lead.last_name ?? "",
+      phone: lead.phone ?? "",
+      date_of_birth: lead.date_of_birth ?? "",
+      insurance_id: lead.insurance_id ?? "",
+      insurance_payer: lead.insurance_payer ?? "",
+      address_line1: lead.address_line1 ?? "",
+      city: lead.city ?? "",
+      state: lead.state ?? "",
+      zip: lead.zip ?? "",
+    });
+    setIsEditing(false);
   }
 
   async function addNote() {
@@ -440,40 +508,158 @@ export function LeadDetails({
           </Alert>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Lead Details</CardTitle>
+                {!isEditing ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                    disabled={loading}
+                  >
+                    <Pencil className="mr-1 h-4 w-4" />
+                    Edit
+                  </Button>
+                ) : null}
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div>
-                  <span className="font-medium">First Name:</span>{" "}
-                  {lead.first_name ?? "—"}
-                </div>
-                <div>
-                  <span className="font-medium">Last Name:</span>{" "}
-                  {lead.last_name ?? "—"}
-                </div>
-                <div>
-                  <span className="font-medium">Mobile Number:</span>{" "}
-                  {lead.phone ?? "—"}
-                </div>
-                <div>
-                  <span className="font-medium">DOB:</span>{" "}
-                  {lead.date_of_birth ? new Date(lead.date_of_birth).toLocaleDateString() : "—"}
-                </div>
-                <div>
-                  <span className="font-medium">Medicaid Number:</span>{" "}
-                  {lead.insurance_id ?? "—"}
-                </div>
-                <div>
-                  <span className="font-medium">Medicaid Provider:</span>{" "}
-                  {lead.insurance_payer ?? "—"}
-                </div>
-                <div>
-                  <span className="font-medium">Address:</span>{" "}
-                  {lead.address_line1 || lead.city || lead.state || lead.zip
-                    ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
-                    : "—"}
-                </div>
+                {!isEditing ? (
+                  <>
+                    <div>
+                      <span className="font-medium">First Name:</span>{" "}
+                      {lead.first_name ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Last Name:</span>{" "}
+                      {lead.last_name ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Mobile Number:</span>{" "}
+                      {lead.phone ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">DOB:</span>{" "}
+                      {lead.date_of_birth ? new Date(lead.date_of_birth).toLocaleDateString() : "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Medicaid Number:</span>{" "}
+                      {lead.insurance_id ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Medicaid Provider:</span>{" "}
+                      {lead.insurance_payer ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Address:</span>{" "}
+                      {lead.address_line1 || lead.city || lead.state || lead.zip
+                        ? `${lead.address_line1 ?? ""}${lead.city ? `, ${lead.city}` : ""}${lead.state ? `, ${lead.state}` : ""} ${lead.zip ?? ""}`.trim()
+                        : "—"}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">First Name</label>
+                      <Input
+                        value={editForm.first_name}
+                        onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Last Name</label>
+                      <Input
+                        value={editForm.last_name}
+                        onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                        placeholder="Last name"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Mobile Number</label>
+                      <Input
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">DOB</label>
+                      <Input
+                        type="date"
+                        value={editForm.date_of_birth}
+                        onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Medicaid Number</label>
+                      <Input
+                        value={editForm.insurance_id}
+                        onChange={(e) => setEditForm({ ...editForm, insurance_id: e.target.value })}
+                        placeholder="Medicaid number"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Medicaid Provider</label>
+                      <Input
+                        value={editForm.insurance_payer}
+                        onChange={(e) => setEditForm({ ...editForm, insurance_payer: e.target.value })}
+                        placeholder="Medicaid provider"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Street Address</label>
+                      <Input
+                        value={editForm.address_line1}
+                        onChange={(e) => setEditForm({ ...editForm, address_line1: e.target.value })}
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="grid gap-2">
+                        <label className="text-sm font-medium">City</label>
+                        <Input
+                          value={editForm.city}
+                          onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                          placeholder="City"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-sm font-medium">State</label>
+                        <Input
+                          value={editForm.state}
+                          onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                          placeholder="State"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-sm font-medium">ZIP</label>
+                        <Input
+                          value={editForm.zip}
+                          onChange={(e) => setEditForm({ ...editForm, zip: e.target.value })}
+                          placeholder="ZIP"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="button"
+                        onClick={saveLeadDetails}
+                        disabled={loading}
+                      >
+                        {loading ? "Saving..." : "Save"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={cancelEdit}
+                        disabled={loading}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
